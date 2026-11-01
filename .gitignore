@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Java / build output
+target/
+build/
+.gradle/
+*.class
+*.log
+
+# Node / React
+node_modules/
+dist/
+
+# Secrets: NEVER commit
+.env
+.env.*
+*.pem
