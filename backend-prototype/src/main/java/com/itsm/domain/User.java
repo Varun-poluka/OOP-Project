@@ -33,7 +33,7 @@ public abstract class User {
     }
 
     public void setName(String name){
-        if(name == null || name.isEmpty()){
+        if(name == null || name.isBlank()){
             throw new IllegalArgumentException("Name cannot be empty");
         }
         this.name = name.trim();
