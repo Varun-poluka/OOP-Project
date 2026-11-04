@@ -50,7 +50,7 @@ public class Technician extends User {
 
     public void removeIncident(){
         if(activeIncidents == 0){
-            throw new IllegalArgumentException("No active incidents to remove");
+            throw new IllegalStateException("No active incidents to remove");
         }
         else{
             activeIncidents--;
