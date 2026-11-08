@@ -18,7 +18,7 @@ public class ITService {
     private int businessCriticality;
 
     @ManyToMany
-    @JoinTable(name = "service dependencies", joinColumns = @JoinColumn(name = "service_id"), inverseJoinColumns = @JoinColumn(name = "depends_on_id"))
+    @JoinTable(name = "service_dependencies", joinColumns = @JoinColumn(name = "service_id"), inverseJoinColumns = @JoinColumn(name = "depends_on_id"))
     private final List<ITService> dependencies = new ArrayList<>();
 
     public ITService(){ }
