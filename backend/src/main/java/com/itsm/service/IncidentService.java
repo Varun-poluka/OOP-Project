@@ -1,6 +1,7 @@
 package com.itsm.service;
 
 import com.itsm.domain.*;
+import com.itsm.domain.event.*;
 import com.itsm.domain.exception.ResourceNotFoundException;
 import com.itsm.domain.strategy.PriorityCalculator;
 import com.itsm.dto.*;
@@ -22,6 +23,7 @@ public class IncidentService {
     private final ITServiceRepository itServiceRepository;
     private final PriorityCalculator priorityCalculator;
     private final AssignmentStrategySelector strategySelector;
+    private final IncidentEventPublisher eventPublisher;
 
     public IncidentService(IncidentRepository incidentRepository,
                            UserRepository userRepository,
@@ -29,7 +31,9 @@ public class IncidentService {
                            CategoryRepository categoryRepository,
                            ITServiceRepository itServiceRepository,
                            PriorityCalculator priorityCalculator,
-                           AssignmentStrategySelector strategySelector) {
+                           AssignmentStrategySelector strategySelector,
+                           IncidentEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
         this.incidentRepository = incidentRepository;
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
@@ -39,6 +43,13 @@ public class IncidentService {
         this.strategySelector = strategySelector;
     }
     // ===== 4.2 Private helpers =====
+
+    private void publishNewEvents(Incident incident, int auditCountBefore){
+        List<AuditRecord> trail = incident.getAuditTrail();
+        for(int i = auditCountBefore; i < trail.size(); i++){
+            eventPublisher.publish(IncidentEvent.from(incident,trail.get(i)));
+        }
+    }
 
     private Incident findIncident(String id) {
         return incidentRepository.findById(id)
@@ -93,6 +104,7 @@ public class IncidentService {
         }
 
         Incident saved = incidentRepository.save(incident);
+        publishNewEvents(saved,0);
         return IncidentResponse.from(saved);
     }
 
@@ -117,70 +129,90 @@ public class IncidentService {
     @Transactional
     public IncidentResponse classify(String incidentId, ClassifyRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.classify(request.priority());
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse assign(String incidentId, TechnicianActionRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.assignTo(findTechnician(request.technicianId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse acknowledge(String incidentId, TechnicianActionRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.acknowledge(findTechnician(request.technicianId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse startWork(String incidentId, TechnicianActionRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.startWork(findTechnician(request.technicianId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse addNote(String incidentId, AddNoteRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.addNote(findTechnician(request.technicianId()), request.text());
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse resolve(String incidentId, ResolveRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.resolve(findTechnician(request.technicianId()), request.resolutionDetails());
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse verify(String incidentId, VerifyRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.verify(findEmployee(request.employeeId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse close(String incidentId, CloseRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.close(findUser(request.userId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse reopen(String incidentId, ReopenRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.reopen(findEmployee(request.employeeId()), request.reason());
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
     public IncidentResponse reassign(String incidentId, ReassignRequest request) {
         Incident incident = findIncident(incidentId);
+        int before = incident.getAuditTrail().size();
         incident.reassign(findTechnician(request.newTechnicianId()), findUser(request.actorId()));
+        publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 }
