@@ -2,6 +2,7 @@ package com.itsm.service;
 
 import com.itsm.domain.*;
 import com.itsm.domain.exception.ResourceNotFoundException;
+import com.itsm.domain.strategy.PriorityCalculator;
 import com.itsm.dto.*;
 import com.itsm.repository.*;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class IncidentService {
@@ -18,17 +20,23 @@ public class IncidentService {
     private final TechnicianRepository technicianRepository;
     private final CategoryRepository categoryRepository;
     private final ITServiceRepository itServiceRepository;
+    private final PriorityCalculator priorityCalculator;
+    private final AssignmentStrategySelector strategySelector;
 
     public IncidentService(IncidentRepository incidentRepository,
                            UserRepository userRepository,
                            TechnicianRepository technicianRepository,
                            CategoryRepository categoryRepository,
-                           ITServiceRepository itServiceRepository) {
+                           ITServiceRepository itServiceRepository,
+                           PriorityCalculator priorityCalculator,
+                           AssignmentStrategySelector strategySelector) {
         this.incidentRepository = incidentRepository;
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
         this.categoryRepository = categoryRepository;
         this.itServiceRepository = itServiceRepository;
+        this.priorityCalculator = priorityCalculator;
+        this.strategySelector = strategySelector;
     }
     // ===== 4.2 Private helpers =====
 
@@ -74,6 +82,15 @@ public class IncidentService {
 
         Incident incident = new Incident(nextIncidentId(), request.title(), request.description(),
                 reporter, category, service, request.impact(), request.urgency());
+
+        Priority priority = priorityCalculator.calculate(request.impact(), request.urgency(), service.getBusinessCriticality());
+        incident.classify(priority);
+
+        List<Technician> candidates = technicianRepository.findByAvailableTrue();
+        Optional<Technician> chosen = strategySelector.getCurrent().selectTechnician(incident, candidates);
+        if(chosen.isPresent()){
+            incident.assignTo(chosen.get());
+        }
 
         Incident saved = incidentRepository.save(incident);
         return IncidentResponse.from(saved);
