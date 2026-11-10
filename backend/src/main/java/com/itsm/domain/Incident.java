@@ -1,5 +1,4 @@
 package com.itsm.domain;
-import com.itsm.domain.exception.InvalidStateTransitionException;
 import com.itsm.domain.exception.UnauthorizedActionException;
 import jakarta.persistence.*;
 
@@ -85,11 +84,6 @@ public class Incident {
         auditTrail.add(new AuditRecord(reporter, "CREATED", null, IncidentStatus.NEW, this.title));
     }
 
-    private void requireStatus(IncidentStatus expected, IncidentStatus target){
-        if(this.status != expected){
-            throw new InvalidStateTransitionException(this.status, target);
-        }
-    }
     private void changeStatus(User actor, IncidentStatus newStatus, String action, String description){
         auditTrail.add(new AuditRecord(actor, action, this.status, newStatus, description));
         this.status = newStatus;
@@ -101,18 +95,16 @@ public class Incident {
         }
     }
 
-    public void classify(Priority priority){
-        requireStatus(IncidentStatus.NEW, IncidentStatus.CLASSIFIED);
-        if(priority == null){
+    void applyClassify(Priority priority) {
+        if (priority == null) {
             throw new NullPointerException("Priority is required");
         }
         this.priority = priority;
         changeStatus(null, IncidentStatus.CLASSIFIED, "CLASSIFIED", "Priority set to: " + priority);
     }
 
-    public void assignTo(Technician tech){
-        requireStatus(IncidentStatus.CLASSIFIED, IncidentStatus.ASSIGNED);
-        if(tech == null){
+    void applyAssign(Technician tech) {
+        if (tech == null) {
             throw new NullPointerException("Technician is required");
         }
         tech.addIncident();
@@ -120,31 +112,25 @@ public class Incident {
         changeStatus(null, IncidentStatus.ASSIGNED, "ASSIGNED", "Assigned to " + tech.getName());
     }
 
-    public void acknowledge(Technician tech){
-        requireStatus(IncidentStatus.ASSIGNED, IncidentStatus.ACKNOWLEDGED);
+    void applyAcknowledge(Technician tech){
         requireAssignedTechnician(tech);
         acknowledgedAt = LocalDateTime.now();
         changeStatus(tech, IncidentStatus.ACKNOWLEDGED, "ACKNOWLEDGED", tech.getName() + " Acknowledged");
 
     }
 
-    public void startWork(Technician tech){
-        requireStatus(IncidentStatus.ACKNOWLEDGED, IncidentStatus.IN_PROGRESS);
+    void applyStartWork(Technician tech){
         requireAssignedTechnician(tech);
         changeStatus(tech, IncidentStatus.IN_PROGRESS, "STARTED", tech.getName() + " Has started the work");
     }
 
-    public void addNote(Technician tech, String text){
-        if(this.status != IncidentStatus.ACKNOWLEDGED && this.status != IncidentStatus.IN_PROGRESS){
-            throw new IllegalStateException("Notes can only be added while the incident is being worked on");
-        }
+    void applyAddNote(Technician tech, String text){
         requireAssignedTechnician(tech);
         notes.add(new InvestigationNote(tech, text));
-        auditTrail.add(new AuditRecord(tech, "NOTE ADDED", null, null, text));
+        auditTrail.add(new AuditRecord(tech, "NOTE_ADDED", null, null, text));
     }
 
-    public void resolve(Technician tech, String details){
-        requireStatus(IncidentStatus.IN_PROGRESS, IncidentStatus.RESOLVED);
+    void applyResolve(Technician tech, String details){
         requireAssignedTechnician(tech);
         if(details == null || details.isBlank()){
             throw new IllegalArgumentException("Resolution details Required");
@@ -155,24 +141,58 @@ public class Incident {
         changeStatus(tech, IncidentStatus.RESOLVED, "RESOLVED",this.resolutionDetails);
     }
 
-    public void verify(Employee employee){
+    void applyVerify(Employee employee){
         if(employee == null){
             throw new NullPointerException("Employee is required");
         }
-        requireStatus(IncidentStatus.RESOLVED, IncidentStatus.VERIFIED);
         if(!employee.equals(reporter)){
             throw new UnauthorizedActionException("Only the reporter of the Incident can verify");
         }
         changeStatus(employee, IncidentStatus.VERIFIED, "VERIFIED", "Verified by: " + employee.getName());
     }
 
-    public void close(User actor){
-        requireStatus(IncidentStatus.VERIFIED, IncidentStatus.CLOSED);
+    void applyClose(User actor){
         if(actor == null){
             throw new NullPointerException("User is required to close");
         }
         this.closedAt = LocalDateTime.now();
         changeStatus(actor, IncidentStatus.CLOSED, "CLOSED", "Incident closed by: " + actor.getName());
+    }
+
+    private IncidentState state(){
+        return IncidentStates.of(status);
+    }
+
+    public void classify(Priority priority){
+        state().classify(this, priority);
+    }
+
+    public void assignTo(Technician tech){
+        state().assign(this, tech);
+    }
+
+    public void acknowledge(Technician tech){
+        state().acknowledge(this,tech);
+    }
+
+    public void startWork(Technician tech){
+        state().startWork(this,tech);
+    }
+
+    public void addNote(Technician tech, String text){
+        state().addNote(this,tech,text);
+    }
+
+    public void resolve(Technician tech, String details){
+        state().resolve(this,tech,details);
+    }
+
+    public void verify(Employee employee){
+        state().verify(this,employee);
+    }
+
+    public void close(User actor){
+        state().close(this,actor);
     }
 
     public String getId() {
