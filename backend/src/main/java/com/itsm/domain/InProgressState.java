@@ -15,4 +15,9 @@ class InProgressState extends IncidentState {
     void resolve(Incident incident, Technician tech, String details){
         incident.applyResolve(tech, details);
     }
+
+    @Override
+    void reassign(Incident incident, Technician newTech, User actor){
+        incident.applyReassign(newTech, actor);
+    }
 }

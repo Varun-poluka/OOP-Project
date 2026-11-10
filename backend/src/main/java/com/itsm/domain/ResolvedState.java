@@ -10,4 +10,9 @@ class ResolvedState extends IncidentState {
     void verify(Incident incident, Employee employee){
         incident.applyVerify(employee);
     }
+
+    @Override
+    void reopen(Incident incident, Employee employee, String reason){
+        incident.applyReopen(employee, reason);
+    }
 }

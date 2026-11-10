@@ -75,4 +75,14 @@ public class IncidentController {
     public IncidentResponse close(@PathVariable String id, @Valid @RequestBody CloseRequest request){
         return incidentService.close(id,request);
     }
+
+    @PatchMapping("/{id}/reopen")
+    public IncidentResponse reopen(@PathVariable String id, @Valid @RequestBody ReopenRequest request){
+        return incidentService.reopen(id,request);
+    }
+
+    @PatchMapping("/{id}/reassign")
+    public IncidentResponse reassign(@PathVariable String id, @Valid @RequestBody ReassignRequest request){
+        return incidentService.reassign(id,request);
+    }
 }

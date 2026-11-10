@@ -10,4 +10,9 @@ class AssignedState extends IncidentState {
     void acknowledge(Incident incident, Technician tech){
         incident.applyAcknowledge(tech);
     }
+
+    @Override
+    void reassign(Incident incident, Technician newTech, User actor){
+        incident.applyReassign(newTech, actor);
+    }
 }

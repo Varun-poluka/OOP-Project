@@ -195,6 +195,52 @@ public class Incident {
         state().close(this,actor);
     }
 
+    public void reopen(Employee employee, String reason){
+        state().reopen(this,employee,reason);
+    }
+
+    public void reassign(Technician newTech, User actor){
+        state().reassign(this, newTech, actor);
+    }
+
+    void applyReopen(Employee employee, String reason) {
+        if (employee == null) {
+            throw new NullPointerException("Employee is required");
+        }
+        if (employee != reporter) {
+            throw new UnauthorizedActionException("Only the reporter can reopen");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required to reopen");
+        }
+        assignedTechnician.addIncident();
+        this.resolutionDetails = null;
+        this.resolvedAt = null;
+
+        changeStatus(employee, IncidentStatus.IN_PROGRESS, "REOPENED", "Reopened: " + reason.trim());
+    }
+
+    void applyReassign(Technician newTech, User actor){
+        if(actor == null){
+            throw new NullPointerException("User is required");
+        }
+        if(!(actor instanceof Administrator)){
+            throw new UnauthorizedActionException("Only an administrator can reassign");
+        }
+        if(newTech == null){
+            throw new NullPointerException("Technician si required");
+        }
+        if(newTech.equals(assignedTechnician)){
+            throw new IllegalArgumentException("Incident already assigned to " + newTech.getName());
+        }
+        newTech.addIncident();
+        assignedTechnician.removeIncident();
+        String previous = assignedTechnician.getName();
+        assignedTechnician = newTech;
+        acknowledgedAt = null;
+        changeStatus(actor, IncidentStatus.ASSIGNED, "REASSIGNED", "Reassigned from " + previous + " to " + newTech.getName());
+    }
+
     public String getId() {
         return id;
     }

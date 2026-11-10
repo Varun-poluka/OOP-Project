@@ -15,4 +15,9 @@ class AcknowledgedState extends IncidentState {
     void addNote(Incident incident, Technician tech, String text){
         incident.applyAddNote(tech,text);
     }
+
+    @Override
+    void reassign(Incident incident, Technician newTech, User actor){
+        incident.applyReassign(newTech, actor);
+    }
 }

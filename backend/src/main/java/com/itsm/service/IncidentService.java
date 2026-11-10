@@ -152,4 +152,18 @@ public class IncidentService {
         incident.close(findUser(request.userId()));
         return IncidentResponse.from(incident);
     }
+
+    @Transactional
+    public IncidentResponse reopen(String incidentId, ReopenRequest request) {
+        Incident incident = findIncident(incidentId);
+        incident.reopen(findEmployee(request.employeeId()), request.reason());
+        return IncidentResponse.from(incident);
+    }
+
+    @Transactional
+    public IncidentResponse reassign(String incidentId, ReassignRequest request) {
+        Incident incident = findIncident(incidentId);
+        incident.reassign(findTechnician(request.newTechnicianId()), findUser(request.actorId()));
+        return IncidentResponse.from(incident);
+    }
 }
