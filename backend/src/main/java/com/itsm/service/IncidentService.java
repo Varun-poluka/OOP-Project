@@ -24,6 +24,7 @@ public class IncidentService {
     private final PriorityCalculator priorityCalculator;
     private final AssignmentStrategySelector strategySelector;
     private final IncidentEventPublisher eventPublisher;
+    private final SLAPolicyRepository slaPolicyRepository;
 
     public IncidentService(IncidentRepository incidentRepository,
                            UserRepository userRepository,
@@ -32,23 +33,22 @@ public class IncidentService {
                            ITServiceRepository itServiceRepository,
                            PriorityCalculator priorityCalculator,
                            AssignmentStrategySelector strategySelector,
-                           IncidentEventPublisher eventPublisher) {
+                           IncidentEventPublisher eventPublisher,
+                           SLAPolicyRepository slaPolicyRepository) {
         this.eventPublisher = eventPublisher;
         this.incidentRepository = incidentRepository;
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
         this.categoryRepository = categoryRepository;
         this.itServiceRepository = itServiceRepository;
+        this.slaPolicyRepository = slaPolicyRepository;
         this.priorityCalculator = priorityCalculator;
         this.strategySelector = strategySelector;
     }
     // ===== 4.2 Private helpers =====
 
-    private void publishNewEvents(Incident incident, int auditCountBefore){
-        List<AuditRecord> trail = incident.getAuditTrail();
-        for(int i = auditCountBefore; i < trail.size(); i++){
-            eventPublisher.publish(IncidentEvent.from(incident,trail.get(i)));
-        }
+    private SLAPolicy findPolicy(Priority priority){
+        return slaPolicyRepository.findById(priority).orElseThrow(() -> new ResourceNotFoundException("SLA policy", priority.name()));
     }
 
     private Incident findIncident(String id) {
@@ -96,6 +96,7 @@ public class IncidentService {
 
         Priority priority = priorityCalculator.calculate(request.impact(), request.urgency(), service.getBusinessCriticality());
         incident.classify(priority);
+        incident.startSla(findPolicy(priority));
 
         List<Technician> candidates = technicianRepository.findByAvailableTrue();
         Optional<Technician> chosen = strategySelector.getCurrent().selectTechnician(incident, candidates);
@@ -104,7 +105,7 @@ public class IncidentService {
         }
 
         Incident saved = incidentRepository.save(incident);
-        publishNewEvents(saved,0);
+        eventPublisher.publishNewEvents(saved,0);
         return IncidentResponse.from(saved);
     }
 
@@ -131,7 +132,8 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.classify(request.priority());
-        publishNewEvents(incident, before);
+        incident.startSla(findPolicy(request.priority()));
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -140,7 +142,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.assignTo(findTechnician(request.technicianId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -149,7 +151,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.acknowledge(findTechnician(request.technicianId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -158,7 +160,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.startWork(findTechnician(request.technicianId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -167,7 +169,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.addNote(findTechnician(request.technicianId()), request.text());
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -176,7 +178,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.resolve(findTechnician(request.technicianId()), request.resolutionDetails());
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -185,7 +187,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.verify(findEmployee(request.employeeId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -194,7 +196,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.close(findUser(request.userId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -203,7 +205,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.reopen(findEmployee(request.employeeId()), request.reason());
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
@@ -212,7 +214,7 @@ public class IncidentService {
         Incident incident = findIncident(incidentId);
         int before = incident.getAuditTrail().size();
         incident.reassign(findTechnician(request.newTechnicianId()), findUser(request.actorId()));
-        publishNewEvents(incident, before);
+        eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 }
