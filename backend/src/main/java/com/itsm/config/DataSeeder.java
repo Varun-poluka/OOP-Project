@@ -14,22 +14,31 @@ public class DataSeeder implements CommandLineRunner {
     private final CategoryRepository categoryRepository;
     private final ITServiceRepository itServiceRepository;
     private final IncidentRepository incidentRepository;
+    private final SLAPolicyRepository slaPolicyRepository;
 
     public DataSeeder(UserRepository userRepository,
                       TechnicianRepository technicianRepository,
                       CategoryRepository categoryRepository,
                       ITServiceRepository itServiceRepository,
-                      IncidentRepository incidentRepository){
+                      IncidentRepository incidentRepository,
+                      SLAPolicyRepository slaPolicyRepository){
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
         this.categoryRepository = categoryRepository;
         this.itServiceRepository = itServiceRepository;
         this.incidentRepository = incidentRepository;
+        this.slaPolicyRepository = slaPolicyRepository;
     }
 
     @Override
     @Transactional
     public void run(String... args){
+        if (slaPolicyRepository.count() == 0) {
+            slaPolicyRepository.save(new SLAPolicy(Priority.P1, 5, 30));
+            slaPolicyRepository.save(new SLAPolicy(Priority.P2, 15, 120));
+            slaPolicyRepository.save(new SLAPolicy(Priority.P3, 60, 480));
+            slaPolicyRepository.save(new SLAPolicy(Priority.P4, 240, 1440));
+        }
         if(userRepository.count() > 0){
             System.out.println("DataSeeder: users already exist, skipping seed");
             return;
