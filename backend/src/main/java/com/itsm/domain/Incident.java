@@ -44,6 +44,10 @@ public class Incident {
     @JoinColumn(name = "incident_id")
     @OrderBy("id")
     private List<AuditRecord> auditTrail = new ArrayList<AuditRecord>();
+    private LocalDateTime responseDueAt;
+    private LocalDateTime resolutionDueAt;
+    private boolean responseBreached;
+    private boolean resolutionBreached;
 
     protected Incident(){}
 
@@ -93,6 +97,38 @@ public class Incident {
         if(tech == null  || !tech.equals(assignedTechnician)){
             throw new UnauthorizedActionException("Only assigned technician can do this");
         }
+    }
+
+    public void startSla(SLAPolicy policy){
+        if(policy == null){
+            throw new NullPointerException("SLA Policy is required");
+        }
+        if(this.priority == null){
+            throw new IllegalStateException("Incident must be classified before its SLA can start");
+        }
+        if(policy.getPriority() != this.priority){
+            throw new IllegalArgumentException("SLA policy " + policy.getPriority() + " does not match incident priority " + priority);
+        }
+        responseDueAt = createdAt.plusMinutes(policy.getResponseMinutes());
+        resolutionDueAt = createdAt.plusMinutes(policy.getResolutionMinutes());
+    }
+
+    public boolean checkSla(LocalDateTime now){
+        if(responseDueAt == null){
+            return false;
+        }
+        boolean changed = false;
+        if(!responseBreached && acknowledgedAt == null && now.isAfter(responseDueAt)){
+            responseBreached = true;
+            auditTrail.add(new AuditRecord(null, "SLA_RESPONSE_BREACHED", null, null, "Not Acknowledged by " + responseDueAt));
+            changed = true;
+        }
+        if(!resolutionBreached && resolvedAt == null && now.isAfter(resolutionDueAt)){
+            resolutionBreached = true;
+            auditTrail.add(new AuditRecord(null, "SLA_RESOLUTION_BREACHED", null, null, "Not resolved by " + resolutionDueAt));
+            changed = true;
+        }
+        return changed;
     }
 
     void applyClassify(Priority priority) {
@@ -311,6 +347,14 @@ public class Incident {
 
     public List<AuditRecord> getAuditTrail() {
         return Collections.unmodifiableList(auditTrail);
+    }
+
+    public boolean isResponseBreached() {
+        return responseBreached;
+    }
+
+    public boolean isResolutionBreached() {
+        return resolutionBreached;
     }
 }
 

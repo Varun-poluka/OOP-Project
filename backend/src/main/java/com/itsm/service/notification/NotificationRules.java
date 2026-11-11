@@ -14,7 +14,7 @@ final class NotificationRules {
             return false;
         }
         String action = event.action();
-        return action.equals("ASSIGNED") || action.equals("REASSIGNED") || action.equals("REOPENED");
+        return action.equals("ASSIGNED") || action.equals("REASSIGNED") || action.equals("REOPENED") || action.equals("SLA_RESPONSE_BREACHED") || action.equals("SLA_RESOLUTION_BREACHED");
     }
 
     static String message(IncidentEvent event) {
