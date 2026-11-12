@@ -114,8 +114,8 @@ public class Incident {
     }
 
     public boolean checkSla(LocalDateTime now){
-        if(responseDueAt == null){
-            return false;
+        if (responseDueAt == null || resolutionDueAt == null) {
+            return false; // incident predates SLA tracking, so there is nothing to check
         }
         boolean changed = false;
         if(!responseBreached && acknowledgedAt == null && now.isAfter(responseDueAt)){
@@ -347,6 +347,14 @@ public class Incident {
 
     public List<AuditRecord> getAuditTrail() {
         return Collections.unmodifiableList(auditTrail);
+    }
+
+    public LocalDateTime getResponseDueAt() {
+        return responseDueAt;
+    }
+
+    public LocalDateTime getResolutionDueAt() {
+        return resolutionDueAt;
     }
 
     public boolean isResponseBreached() {

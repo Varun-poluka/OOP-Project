@@ -33,6 +33,10 @@ public record IncidentResponse(
         LocalDateTime acknowledgedAt,
         LocalDateTime resolvedAt,
         LocalDateTime closedAt,
+        LocalDateTime responseDueAt,
+        LocalDateTime resolutionDueAt,
+        boolean responseBreached,
+        boolean resolutionBreached,
         List<NoteResponse> notes,
         List<AuditRecordResponse> auditTrail
 ) {
@@ -70,6 +74,10 @@ public record IncidentResponse(
                 incident.getAcknowledgedAt(),
                 incident.getResolvedAt(),
                 incident.getClosedAt(),
+                incident.getResponseDueAt(),
+                incident.getResolutionDueAt(),
+                incident.isResponseBreached(),
+                incident.isResolutionBreached(),
                 Collections.unmodifiableList(notes),
                 Collections.unmodifiableList(auditTrail));
     }
