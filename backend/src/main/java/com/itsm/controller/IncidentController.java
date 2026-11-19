@@ -4,6 +4,9 @@ import com.itsm.domain.IncidentStatus;
 import com.itsm.dto.*;
 import com.itsm.service.IncidentService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +26,13 @@ public class IncidentController {
     @ResponseStatus(HttpStatus.CREATED)
     public IncidentResponse report(@Valid @RequestBody CreateIncidentRequest request) {
         return incidentService.report(request);
+    }
+
+    @GetMapping("/search")
+    public PageResponse<IncidentResponse> search(
+            IncidentSearchCriteria criteria,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return incidentService.search(criteria, pageable);
     }
 
     @GetMapping("/{id}")

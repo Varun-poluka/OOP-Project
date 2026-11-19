@@ -6,6 +6,8 @@ import com.itsm.domain.exception.ResourceNotFoundException;
 import com.itsm.domain.strategy.PriorityCalculator;
 import com.itsm.dto.*;
 import com.itsm.repository.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -125,6 +127,15 @@ public class IncidentService {
             result.add(IncidentResponse.from(incident));
         }
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<IncidentResponse> search(IncidentSearchCriteria criteria, Pageable pageable) {
+        if (criteria.from() != null && criteria.to() != null && !criteria.from().isBefore(criteria.to())) {
+            throw new IllegalArgumentException("'from' must be before 'to'");
+        }
+        Page<Incident> page = incidentRepository.findAll(IncidentSpecifications.matching(criteria), pageable);
+        return PageResponse.from(page, IncidentResponse::from);
     }
 
     @Transactional
