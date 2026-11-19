@@ -131,6 +131,17 @@ public class Incident {
         return changed;
     }
 
+    // Test-only hook: the lifecycle always stamps LocalDateTime.now(), so unit tests use this
+    // to place events at chosen times. Package-private, so services and controllers cannot call it.
+    void overrideTimestampsForTest(LocalDateTime createdAt, LocalDateTime acknowledgedAt, LocalDateTime resolvedAt) {
+        if (createdAt == null) {
+            throw new NullPointerException("createdAt is required");
+        }
+        this.createdAt = createdAt;
+        this.acknowledgedAt = acknowledgedAt;
+        this.resolvedAt = resolvedAt;
+    }
+
     void applyClassify(Priority priority) {
         if (priority == null) {
             throw new NullPointerException("Priority is required");

@@ -8,15 +8,19 @@ import com.itsm.dto.*;
 import com.itsm.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class IncidentService {
+
+    private static final Set<String> SORTABLE_FIELDS = Set.of("createdAt", "priority", "status", "title");
 
     private final IncidentRepository incidentRepository;
     private final UserRepository userRepository;
@@ -133,6 +137,12 @@ public class IncidentService {
     public PageResponse<IncidentResponse> search(IncidentSearchCriteria criteria, Pageable pageable) {
         if (criteria.from() != null && criteria.to() != null && !criteria.from().isBefore(criteria.to())) {
             throw new IllegalArgumentException("'from' must be before 'to'");
+        }
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SORTABLE_FIELDS.contains(order.getProperty())) {
+                throw new IllegalArgumentException("Cannot sort by '" + order.getProperty()
+                        + "'. Allowed: " + SORTABLE_FIELDS);
+            }
         }
         Page<Incident> page = incidentRepository.findAll(IncidentSpecifications.matching(criteria), pageable);
         return PageResponse.from(page, IncidentResponse::from);

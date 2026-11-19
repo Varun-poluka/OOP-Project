@@ -10,6 +10,8 @@ import java.util.List;
 
 public final class IncidentSpecifications {
 
+    private static final char ESCAPE = '\\';
+
     private IncidentSpecifications(){
 
     }
@@ -50,12 +52,19 @@ public final class IncidentSpecifications {
             }
         }
         if (c.text() != null && !c.text().isBlank()) {
-            String pattern = "%" + c.text().toLowerCase() + "%";
+            String pattern = "%" + escapeLike(c.text().toLowerCase()) + "%";
             specs.add((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(root.<String>get("title")), pattern),
-                    cb.like(cb.lower(root.<String>get("description")), pattern)));
+                    cb.like(cb.lower(root.<String>get("title")), pattern, ESCAPE),
+                    cb.like(cb.lower(root.<String>get("description")), pattern, ESCAPE)));
         }
 
         return Specification.allOf(specs);
+    }
+
+    // Makes \, % and _ match literally: "50%" must not mean "50 followed by anything".
+    static String escapeLike(String text) {
+        return text.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 }
