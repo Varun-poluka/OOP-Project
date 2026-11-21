@@ -17,6 +17,11 @@ if (window.matchMedia === undefined) {
     }) as MediaQueryList
 }
 
+// Radix UI (Select, dialogs) calls these browser functions, which jsdom does not implement.
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
+Element.prototype.scrollIntoView ??= () => {}
+
 afterEach(() => {
   cleanup()
   sessionStorage.clear()

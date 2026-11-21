@@ -138,3 +138,22 @@ describe('buildUrl', () => {
     expect(url).toBe('http://localhost:8080/api/incidents/search?status=NEW&text=vpn+drops&page=0')
   })
 })
+
+describe('apiFetch field errors', () => {
+  it('attaches per-field messages to a 400 validation error', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, { status: 400, detail: 'title: must not be blank; serviceId: must not be null; ' }),
+    )
+
+    const error = await catchError(apiFetch('/api/incidents', { method: 'POST', body: {} }))
+
+    expect(error.fieldErrors).toEqual({ title: 'must not be blank', serviceId: 'must not be null' })
+    expect(error.message).toBe('Title: must not be blank. Service id: must not be null.')
+  })
+
+  it('has no field errors for other failures', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(409, { status: 409, detail: 'Cannot verify in state NEW' }))
+    const error = await catchError(apiFetch('/api/incidents/INC-1/verify', { method: 'PATCH' }))
+    expect(error.fieldErrors).toEqual({})
+  })
+})

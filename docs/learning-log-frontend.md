@@ -231,3 +231,207 @@ frontend and backend work can happen in parallel without editing the same file.
       running."
   - Not yet tested against the real `/api/auth/login`. That happens once the backend slice
     lands.
+
+---
+
+### 2026-11-21: Frontend slice F2 · Employee flow, incident detail, notifications
+
+- **What was built:**
+  - *Report incident:* a form for employees, with a "Possibly already reported" panel that
+    checks for duplicates while they type.
+  - *My incidents:* a list with filters, sorting and paging, all kept in the URL.
+  - *Incident detail:* one page used by all roles, with SLA clocks, the service impact
+    list, notes, the history timeline, and only the actions the current user may take.
+    Admins also get ranked technician recommendations.
+  - *Notifications:* real data, mark as read, and an unread badge in the top bar that
+    refreshes every 30 s.
+  - Then a full walkthrough against the real backend, fixing what broke.
+- **Why:** this is the first slice where the UI really drives the incident lifecycle. An
+  employee can report, a technician can work the incident, an admin can assign it, and the
+  employee can confirm the fix.
+
+- **Files:**
+  - *API layer:*
+    - `src/api/types.ts`: updated to today's backend. Action bodies no longer carry user IDs
+      (the backend takes the user from the JWT). New types: `RiskLevel`, services, impact,
+      duplicate candidates, recommendations.
+    - `src/api/incidents.ts`: one function per endpoint, plus `checkDuplicates`, `impact`,
+      `recommendations` and `atRisk`.
+    - `src/api/services.ts`: the services list and service impact.
+    - `src/api/categories.ts`: `getCategories()`, the stopgap described below.
+    - `src/api/useReferenceData.ts`: `useServices` and `useCategories`.
+    - `src/api/queryKeys.ts`: every cache key in one place.
+    - `src/api/errors.ts` + `client.ts`: `ApiError.fieldErrors`, the per-field validation
+      messages from a 400.
+  - *Report:*
+    - `src/features/report/reportSchema.ts`: the zod rules.
+    - `src/features/report/useDuplicateCheck.ts`: debounced duplicate query.
+    - `src/features/report/DuplicatePanel.tsx`: the "Possibly already reported" panel.
+    - `src/pages/employee/ReportIncidentPage.tsx`: the form page.
+  - *List:*
+    - `src/features/incidents/listParams.ts`: URL ↔ filters, as pure functions.
+    - `src/features/incidents/IncidentTable.tsx`: the table and pager, reusable later by
+      the technician queue.
+    - `src/pages/employee/MyIncidentsPage.tsx`: the list page.
+  - *Detail:*
+    - `src/features/incident/actions.ts`: `availableActions`, the one pure function that
+      decides the buttons.
+    - `useIncidentAction.ts`: the single mutation hook every action goes through.
+    - `ActionBar.tsx`, `RecommendationsPanel.tsx` + `recommendations.ts`, `SlaPanel.tsx` +
+      `slaClocks.ts`, `ImpactPanel.tsx`, `NotesSection.tsx`, `AuditTimeline.tsx`,
+      `Panel.tsx`.
+    - `src/pages/shared/IncidentDetailPage.tsx`: the page, with friendly 403 and 404
+      screens.
+  - *Notifications:*
+    - `src/features/notifications/useNotifications.ts`: `useNotifications`,
+      `useUnreadCount`, `useMarkAsRead`.
+    - `NotificationBell.tsx`: the bell in the top bar.
+    - `src/pages/shared/NotificationsPage.tsx`: the page.
+  - *Shared:*
+    - `src/components/FormField.tsx`, `ConfirmDialog.tsx`, `QueryState.tsx`,
+      `RiskBadge.tsx`, `SlaClockBadge.tsx`.
+    - `src/lib/useDebouncedValue.ts`, `time.ts`, `labels.ts` (risk and level labels).
+    - `src/lib/sla.ts`: adds `slaClock` (running / met / missed).
+    - shadcn `select`, `textarea`, `alert-dialog`, `progress`.
+  - *Tests:*
+    - `actions.test.ts`, `recommendations.test.ts`, `reportSchema.test.ts`,
+      `DuplicatePanel.test.tsx`, `ReportIncidentPage.test.tsx`, `listParams.test.ts`,
+      `useDebouncedValue.test.ts`.
+    - Additions to `errors`, `client` and `sla` tests.
+    - `LoginPage.test.tsx` now uses a fake `fetch` (see below).
+
+- **Key concepts:**
+  - **Forms with react-hook-form:** the library keeps field values inside the form instead
+    of in React state, so typing in one field doesn't re-render the whole page.
+    - `register('title')` connects a plain input.
+    - `<Controller>` connects components that aren't plain inputs, like the Radix Select.
+    - `useWatch` subscribes to just the fields we need: the four that feed the duplicate
+      check.
+    - `handleSubmit(fn)` validates first, and calls `fn` only with valid values.
+    - `setError(field, …)` puts a message under a field. We use it to show the backend's own
+      validation messages: a 400 with `"title: must not be blank; "` becomes
+      `ApiError.fieldErrors = { title: 'must not be blank' }`, and each entry goes under its
+      field. The form fields use the backend's names (`serviceId`, `categoryName`) on
+      purpose, so this needs no translation table.
+  - **Validation with zod:** `reportSchema` describes the rules once: required fields,
+    trimming, length limits copied from the Java `@Size` annotations, and allowed enum
+    values.
+    - `zodResolver` plugs it into the form.
+    - `z.input` / `z.output` give two TypeScript types: what the user typed (impact may still
+      be unset) and what validation guarantees (impact is set, text is trimmed).
+    - Client-side validation is for quick feedback only. The backend still validates
+      everything, which is why server field errors are handled too.
+  - **Debouncing:** wait until the user stops typing before doing the expensive thing.
+    - `useDebouncedValue(value, 600)` restarts a timer on every change and passes the value
+      on only when the timer finishes. The effect's cleanup function cancels the previous
+      timer.
+    - Pitfall avoided: the duplicate-check request object is built with `useMemo` from its
+      four values. A new object on every render would count as a "change" every time and
+      restart the timer forever.
+    - The duplicate query is also `enabled` only from 4 characters, uses `retry: false`
+      (it's only a hint), and receives TanStack Query's `AbortSignal`, so an outdated
+      request is cancelled.
+    - On My incidents, the search box debounces inside the change handler instead.
+      `update()` uses `setSearchParams(prev => …)`, which reads the latest URL, so a status
+      filter changed during the 400 ms wait isn't overwritten. This was a real bug in my
+      first version.
+  - **URL as state:** the list's filters, page and sort live in the query string
+    (`?status=RESOLVED&q=vpn&page=2`).
+    - A reload keeps them, a link shares them, and Back undoes a filter change.
+    - `readListFilters` ignores anything unknown, because users can type any URL.
+    - `writeListFilters` leaves out default values, so URLs stay short.
+    - When Back changes the URL's text, the search box catches up using React's "adjust
+      state while rendering" pattern (compare with the last value seen) instead of an
+      effect that copies state into state.
+  - **Mutations and cache invalidation:** a *query* reads server data and caches it under a
+    key. A *mutation* changes server data. After a mutation, the cache is out of date, so
+    `useIncidentAction` does three things on success:
+    1. `setQueryData(incident key, returned incident)`: the backend returns the updated
+       incident, so the detail page updates instantly without another request.
+    2. `invalidateQueries` on the lists, recommendations and notifications: these are
+       marked stale and refetch in the background. Keys are prefix-matched, so
+       `['incidents', 'list']` covers every filtered list page.
+    3. A toast. On error, a toast with the readable `ApiError.message`.
+
+    `queryKeys.ts` keeps every key in one place, so a typo can't make an invalidation
+    silently miss. Notifications use `refetchInterval: 30_000`, a simple poll until live
+    updates arrive. `useUnreadCount` reads the same cached query and derives the count
+    with `select`, so the badge costs no extra request.
+  - **Deriving the UI from one pure function:** `availableActions(incident, user)` returns
+    the actions allowed for this role, owner and status. It mirrors the backend's three
+    layers: the State classes (which status allows what), `SecurityConfig` (which role),
+    and the service's ownership checks (reporter / assigned technician).
+    - The page shows exactly those buttons and nothing else.
+    - So the whole rule set is tested in one table-driven test: 8 statuses × 5 kinds of
+      user.
+    - The same idea is used for `unassignableReason(tech)`, which mirrors
+      `Technician.canTakeMoreWork()`.
+  - **Confirm dialogs that survive errors:** `ConfirmDialog` stays open while the request
+    runs and closes only on success. If the backend refuses (e.g. 409 "Cannot take more
+    work"), the user keeps what they typed.
+    - shadcn's `AlertDialogAction` closes immediately, so a plain `Button` is used instead.
+    - Text-required actions (resolve, reopen) show "This is required" until filled.
+  - **Render props (`FormField`):** `FormField` passes the label's `id`/`aria-*` props to a
+    function, and each field decides which element receives them.
+    - This fixed an accessibility bug a test found: the props were going to Radix's
+      `<Select>` root, which renders no element. So the four dropdowns had no label linked
+      to them, and screen readers announced an unnamed combobox. They now go on the
+      trigger button.
+  - **Tests and the network:** the login tests render the whole app, and the shell now
+    loads notifications. Without a fake `fetch`, jsdom tried real network calls, which made
+    one test fail at random. `vi.stubGlobal('fetch', …)` now gives every test predictable,
+    instant answers.
+  - **Missing vs null in JSON:** `DuplicateCandidateResponse` uses
+    `@JsonInclude(NON_NULL)`, so for employees `score` and `reasons` are *missing*, not
+    `null`. In TypeScript that's `score?: number` (undefined), and code must check for
+    `undefined`. I had typed them as `null`, the unit test used `null` too, so it passed,
+    and the live page crashed. The lesson: test fixtures should be copied from real
+    responses, not from what I expect.
+  - **Stopgaps behind one function:** categories come from `getCategories()`, which returns
+    the 4 seeded categories for now, and the badge comes from `useUnreadCount()`. When
+    `GET /api/categories` and `GET /api/notifications/unread-count` land, only those
+    function bodies change.
+
+- **How it was tested:**
+  - `npm run build` passes. `npm run lint` shows 0 warnings. `npm test` passes **120 tests**
+    in 13 files:
+    - `availableActions`: every status × reporter / assigned technician / admin / other
+      employee / other technician.
+    - The report schema: required fields, trimming, limits, enums, request conversion.
+    - The report page: empty submit shows every field message and sends nothing; backend
+      field errors appear under the right fields; success navigates to the new incident.
+    - The duplicate panel: links and statuses; score and reasons only when present; spinner
+      while rechecking.
+    - The pure helpers: list URL filters, `slaClock`, `useDebouncedValue` (fake timers),
+      `parseFieldErrors`, and the capacity rule.
+  - **Real-backend walkthrough** (seeded users, password123, Playwright, screenshots of
+    every step):
+    1. *Employee:* My incidents shows real data. Reporting "Hostel network down again"
+       showed two similar incidents in the duplicate panel. Submitting created **INC-0009**.
+       The backend raised it to P1 (7 dependent services) and could not auto-assign it, so
+       it was CLASSIFIED.
+    2. *Admin:* Opening it shows the recommendations. Assigning to Neha first returned
+       **409 "Cannot take more work (3/3)"**, because every technician was full. The error
+       toast showed it and the dialog stayed open.
+    3. To free capacity, Neha started and resolved her existing INC-0003 through the UI.
+       This was the only change made to other demo data.
+    4. *Admin:* Assigning INC-0009 to Neha then worked. The page and recommendations
+       updated without a reload.
+    5. *Technician (Neha):* Her notifications list INC-0009, and mark-as-read dropped the
+       badge from 9 to 8. She acknowledged it (response SLA **Met**), started work, added a
+       note, and resolved it (resolution SLA **Met**).
+    6. *Employee:* She verified, then closed it.
+
+    The backend audit trail confirms all ten entries with the correct actor for each.
+  - **What broke and was fixed:**
+    1. The duplicate panel crashed the report page on missing `score`/`reasons` (above).
+    2. Every notification's `incidentId` is `null` on the live backend, so the type is now
+       nullable, and such a row is marked read on click instead of opening `/incidents/null`.
+    3. The recommendations panel offered "Assign" for technicians the backend always
+       refuses. They now show "Full (3/3)" or "Unavailable", and the highlight goes to the
+       best technician who can take it.
+  - **Tooling note:** partway through, the Playwright browser stopped delivering any mouse
+    or keyboard input, even to a bare HTML page with one button, and restarting the browser
+    didn't fix it. The final two steps (verify, close) were therefore triggered with
+    JavaScript `element.click()`. That runs the same handlers, dialogs and API calls, and
+    every earlier step used real clicks.

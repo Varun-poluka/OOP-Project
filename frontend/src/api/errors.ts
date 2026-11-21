@@ -8,12 +8,18 @@ import type { ProblemDetail } from './types'
 export class ApiError extends Error {
   readonly status: number
   readonly title: string | undefined
+  /**
+   * Per-field validation messages from a 400, keyed by the backend field name,
+   * e.g. { title: 'must not be blank' }. Empty when the error is not about fields.
+   */
+  readonly fieldErrors: Readonly<Record<string, string>>
 
-  constructor(status: number, message: string, title?: string) {
+  constructor(status: number, message: string, title?: string, fieldErrors: Record<string, string> = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.title = title
+    this.fieldErrors = fieldErrors
   }
 }
 
@@ -33,23 +39,33 @@ export function messageForStatus(status: number): string {
 /**
  * The backend's validation handler joins field errors as
  * "title: must not be blank; serviceId: must not be null; ".
- * This turns that into "Title: must not be blank. Service id: must not be null."
- * Returns null when the text does not look like that format.
+ * Returns them as { title: 'must not be blank', serviceId: 'must not be null' },
+ * or null when the text does not look like that format.
  */
-export function formatValidationDetail(detail: string): string | null {
+export function parseFieldErrors(detail: string): Record<string, string> | null {
   const parts = detail
     .split(';')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
   if (parts.length === 0) return null
 
-  const sentences: string[] = []
+  const errors: Record<string, string> = {}
   for (const part of parts) {
     const match = /^([A-Za-z][A-Za-z0-9.]*): (.+)$/.exec(part)
     if (match === null) return null
-    sentences.push(`${humaniseField(match[1])}: ${match[2]}.`)
+    // If a field has two problems, keep the first; the form shows one message per field.
+    if (!(match[1] in errors)) errors[match[1]] = match[2]
   }
-  return sentences.join(' ')
+  return errors
+}
+
+/** The same field errors as readable sentences: "Title: must not be blank. Service id: must not be null." */
+export function formatValidationDetail(detail: string): string | null {
+  const errors = parseFieldErrors(detail)
+  if (errors === null) return null
+  return Object.entries(errors)
+    .map(([field, message]) => `${humaniseField(field)}: ${message}.`)
+    .join(' ')
 }
 
 /** "serviceId" -> "Service id", "reporter.name" -> "Reporter name". */

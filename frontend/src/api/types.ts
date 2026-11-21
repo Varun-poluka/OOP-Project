@@ -24,8 +24,14 @@ export type IncidentStatus = (typeof INCIDENT_STATUSES)[number]
 export const PRIORITIES = ['P1', 'P2', 'P3', 'P4'] as const
 export type Priority = (typeof PRIORITIES)[number]
 
-export type Impact = 'LOW' | 'MEDIUM' | 'HIGH'
-export type Urgency = 'LOW' | 'MEDIUM' | 'HIGH'
+export const IMPACTS = ['LOW', 'MEDIUM', 'HIGH'] as const
+export type Impact = (typeof IMPACTS)[number]
+export const URGENCIES = ['LOW', 'MEDIUM', 'HIGH'] as const
+export type Urgency = (typeof URGENCIES)[number]
+
+/** com.itsm.service.intelligence.RiskLevel: how close the most urgent running SLA clock is to breaching. */
+export const RISK_LEVELS = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'BREACHED'] as const
+export type RiskLevel = (typeof RISK_LEVELS)[number]
 
 export const ROLES = ['EMPLOYEE', 'TECHNICIAN', 'ADMIN'] as const
 export type Role = (typeof ROLES)[number]
@@ -94,8 +100,34 @@ export type IncidentResponse = {
   resolutionDueAt: LocalDateTimeString | null
   responseBreached: boolean
   resolutionBreached: boolean
+  responseAtRisk: boolean
+  resolutionAtRisk: boolean
+  riskLevel: RiskLevel
+  /** Share (0-100+) of the most urgent running SLA window already used; null when no clock runs. */
+  slaPercentUsed: number | null
   notes: NoteResponse[]
   auditTrail: AuditRecordResponse[]
+  /** Filled only in the response to POST /api/incidents; empty everywhere else. */
+  possibleDuplicates: DuplicateCandidate[]
+}
+
+/**
+ * DuplicateCandidateResponse. The backend uses @JsonInclude(NON_NULL), so for employees
+ * score and reasons are *missing* from the JSON (undefined here), not null.
+ */
+export type DuplicateCandidate = {
+  incidentId: string
+  title: string
+  status: IncidentStatus
+  score?: number
+  reasons?: string[]
+}
+
+export type DuplicateCheckRequest = {
+  title: string
+  description?: string
+  categoryName?: string
+  affectedServiceId?: number
 }
 
 export type PageResponse<T> = {
@@ -122,27 +154,65 @@ export type IncidentSearchCriteria = {
 export type CreateIncidentRequest = {
   title: string
   description?: string
-  reporterId: string
   categoryName: string
   serviceId: number
   impact: Impact
   urgency: Urgency
+  /** Admins only: the employee this incident is reported for. */
+  onBehalfOfEmployeeId?: string
 }
 
-export type TechnicianActionRequest = { technicianId: string }
+// Action bodies. The acting user comes from the JWT on the backend, never from the body;
+// acknowledge, start, verify and close have no body at all.
 export type ClassifyRequest = { priority: Priority }
-export type AddNoteRequest = { technicianId: string; text: string }
-export type ResolveRequest = { technicianId: string; resolutionDetails: string }
-export type VerifyRequest = { employeeId: string }
-export type CloseRequest = { userId: string }
-export type ReopenRequest = { employeeId: string; reason: string }
-export type ReassignRequest = { newTechnicianId: string; actorId: string }
+export type AssignRequest = { technicianId: string }
+export type ReassignRequest = { newTechnicianId: string }
+export type AddNoteRequest = { text: string }
+export type ResolveRequest = { resolutionDetails: string }
+export type ReopenRequest = { reason: string }
+
+/** TechnicianRecommendationResponse: one ranked technician for an incident (admin only). */
+export type TechnicianRecommendation = {
+  technicianId: string
+  name: string
+  score: number
+  available: boolean
+  activeIncidents: number
+  maxWorkload: number
+  reasons: string[]
+}
+
+// ---- Services ----
+
+export type ServiceRef = { id: number; name: string }
+
+export type ServiceResponse = {
+  id: number
+  name: string
+  /** 1 (low) to 3 (critical). */
+  businessCriticality: number
+  dependsOn: ServiceRef[]
+  openIncidentCount: number
+}
+
+/** Services that depend (directly or indirectly) on the given one; distance = hops away. */
+export type ImpactResponse = {
+  serviceId: number
+  serviceName: string
+  impactedCount: number
+  impacted: { id: number; name: string; businessCriticality: number; distance: number }[]
+}
+
+// ---- Categories ----
+
+export type CategoryResponse = { name: string; description: string }
 
 // ---- Notifications ----
 
 export type NotificationResponse = {
   id: number
-  incidentId: string
+  /** Can be null (the live backend currently sends null for every notification). */
+  incidentId: string | null
   message: string
   read: boolean
   createdAt: LocalDateTimeString
@@ -161,7 +231,7 @@ export type UpdateSlaPolicyRequest = { responseMinutes: number; resolutionMinute
 export type StrategyResponse = { current: string; available: string[] }
 export type ChangeStrategyRequest = { strategy: string }
 
-export type SlaCheckResponse = { checkedAt: LocalDateTimeString; breachesRecorded: number }
+export type SlaCheckResponse = { checkedAt: LocalDateTimeString; breachesRecorded: number; risksRecorded: number }
 
 // ---- Reports ----
 

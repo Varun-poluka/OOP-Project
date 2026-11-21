@@ -62,3 +62,36 @@ export function slaCountdown(dueAt: string | null, nowMs: number, breached = fal
   if (remainingMs < SLA_WARNING_MS) return { state: 'warning', label: formatDuration(remainingMs), remainingMs }
   return { state: 'ok', label: formatDuration(remainingMs), remainingMs }
 }
+
+export type SlaClock =
+  | { phase: 'running'; countdown: SlaCountdown }
+  | { phase: 'met'; label: string }
+  | { phase: 'missed'; label: string }
+  | { phase: 'none'; label: string }
+
+/**
+ * One SLA clock (response or resolution) of an incident.
+ * The clock stops when the work it measures happens: response at acknowledgedAt,
+ * resolution at resolvedAt. Before that it counts down; after, it is met or missed.
+ *
+ * @param dueAt      responseDueAt / resolutionDueAt
+ * @param stoppedAt  acknowledgedAt / resolvedAt (null while still running)
+ * @param breached   responseBreached / resolutionBreached from the backend
+ */
+export function slaClock(
+  dueAt: string | null,
+  stoppedAt: string | null,
+  breached: boolean,
+  nowMs: number,
+): SlaClock {
+  if (dueAt === null) return { phase: 'none', label: 'No SLA' }
+  if (stoppedAt === null) return { phase: 'running', countdown: slaCountdown(dueAt, nowMs, breached) }
+
+  // Stopped: "met" means done at or before the deadline (the backend's rule), unless it flagged a breach.
+  const dueMs = parseBackendDateTime(dueAt)
+  const stoppedMs = parseBackendDateTime(stoppedAt)
+  if (breached || (!Number.isNaN(dueMs) && !Number.isNaN(stoppedMs) && stoppedMs > dueMs)) {
+    return { phase: 'missed', label: 'Missed' }
+  }
+  return { phase: 'met', label: 'Met' }
+}

@@ -1,21 +1,19 @@
 import { apiFetch } from './client'
 import type {
-  AddNoteRequest,
-  CloseRequest,
   CreateIncidentRequest,
+  DuplicateCandidate,
+  DuplicateCheckRequest,
+  ImpactResponse,
   IncidentResponse,
   IncidentSearchCriteria,
   IncidentStatus,
   PageResponse,
   Priority,
-  ReassignRequest,
-  ReopenRequest,
-  ResolveRequest,
-  TechnicianActionRequest,
-  VerifyRequest,
+  TechnicianRecommendation,
 } from './types'
 
 // One function per endpoint in IncidentController. encodeURIComponent keeps odd IDs safe in the URL.
+// The backend takes the acting user from the token, so no user IDs are sent.
 const incidentPath = (id: string) => `/api/incidents/${encodeURIComponent(id)}`
 
 export type PageRequest = { page?: number; size?: number; sort?: string }
@@ -24,6 +22,9 @@ export const incidentsApi = {
   report: (request: CreateIncidentRequest) =>
     apiFetch<IncidentResponse>('/api/incidents', { method: 'POST', body: request }),
 
+  checkDuplicates: (request: DuplicateCheckRequest, signal?: AbortSignal) =>
+    apiFetch<DuplicateCandidate[]>('/api/incidents/duplicates/check', { method: 'POST', body: request, signal }),
+
   get: (id: string) => apiFetch<IncidentResponse>(incidentPath(id)),
 
   list: (status?: IncidentStatus) => apiFetch<IncidentResponse[]>('/api/incidents', { query: { status } }),
@@ -31,33 +32,37 @@ export const incidentsApi = {
   search: (criteria: IncidentSearchCriteria, page: PageRequest = {}) =>
     apiFetch<PageResponse<IncidentResponse>>('/api/incidents/search', { query: { ...criteria, ...page } }),
 
-  acknowledge: (id: string, request: TechnicianActionRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/acknowledge`, { method: 'PATCH', body: request }),
+  atRisk: () => apiFetch<IncidentResponse[]>('/api/incidents/at-risk'),
+
+  impact: (id: string) => apiFetch<ImpactResponse>(`${incidentPath(id)}/impact`),
+
+  recommendations: (id: string) => apiFetch<TechnicianRecommendation[]>(`${incidentPath(id)}/recommendations`),
+
+  // ---- lifecycle actions ----
 
   classify: (id: string, priority: Priority) =>
     apiFetch<IncidentResponse>(`${incidentPath(id)}/classify`, { method: 'PATCH', body: { priority } }),
 
-  assign: (id: string, request: TechnicianActionRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/assign`, { method: 'PATCH', body: request }),
+  assign: (id: string, technicianId: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/assign`, { method: 'PATCH', body: { technicianId } }),
 
-  start: (id: string, request: TechnicianActionRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/start`, { method: 'PATCH', body: request }),
+  reassign: (id: string, newTechnicianId: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/reassign`, { method: 'PATCH', body: { newTechnicianId } }),
 
-  addNote: (id: string, request: AddNoteRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/notes`, { method: 'POST', body: request }),
+  acknowledge: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/acknowledge`, { method: 'PATCH' }),
 
-  resolve: (id: string, request: ResolveRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/resolve`, { method: 'PATCH', body: request }),
+  start: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/start`, { method: 'PATCH' }),
 
-  verify: (id: string, request: VerifyRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/verify`, { method: 'PATCH', body: request }),
+  addNote: (id: string, text: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/notes`, { method: 'POST', body: { text } }),
 
-  close: (id: string, request: CloseRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/close`, { method: 'PATCH', body: request }),
+  resolve: (id: string, resolutionDetails: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/resolve`, { method: 'PATCH', body: { resolutionDetails } }),
 
-  reopen: (id: string, request: ReopenRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/reopen`, { method: 'PATCH', body: request }),
+  verify: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/verify`, { method: 'PATCH' }),
 
-  reassign: (id: string, request: ReassignRequest) =>
-    apiFetch<IncidentResponse>(`${incidentPath(id)}/reassign`, { method: 'PATCH', body: request }),
+  close: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/close`, { method: 'PATCH' }),
+
+  reopen: (id: string, reason: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/reopen`, { method: 'PATCH', body: { reason } }),
 }

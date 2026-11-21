@@ -2,6 +2,7 @@ import { Link, Outlet, useMatch } from 'react-router'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -53,6 +54,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-end gap-1 border-b bg-background/85 px-4 backdrop-blur md:px-8">
+          <NotificationBell />
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

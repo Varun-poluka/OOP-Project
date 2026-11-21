@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError, errorMessage, formatValidationDetail, toReadableMessage } from './errors'
+import { ApiError, errorMessage, formatValidationDetail, parseFieldErrors, toReadableMessage } from './errors'
 
 describe('toReadableMessage', () => {
   it('uses the ProblemDetail detail when present', () => {
@@ -48,5 +48,24 @@ describe('errorMessage', () => {
     expect(errorMessage(new ApiError(400, 'Bad input'))).toBe('Bad input')
     expect(errorMessage(new Error('boom'))).toBe('boom')
     expect(errorMessage('a string')).toBe('Something went wrong.')
+  })
+})
+
+describe('parseFieldErrors', () => {
+  it('turns the backend validation detail into a field -> message map', () => {
+    expect(parseFieldErrors('title: must not be blank; serviceId: must not be null; ')).toEqual({
+      title: 'must not be blank',
+      serviceId: 'must not be null',
+    })
+  })
+
+  it('keeps the first message when a field appears twice', () => {
+    expect(parseFieldErrors('title: must not be blank; title: size must be between 0 and 200; ')).toEqual({
+      title: 'must not be blank',
+    })
+  })
+
+  it('returns null for other text', () => {
+    expect(parseFieldErrors("'from' must be before 'to'")).toBeNull()
   })
 })

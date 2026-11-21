@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDuration, parseBackendDateTime, slaCountdown } from './sla'
+import { formatDuration, parseBackendDateTime, slaClock, slaCountdown } from './sla'
 
 // A fixed "now" so results never depend on when the test runs. Local time, like the backend.
 const NOW = new Date(2026, 10, 21, 12, 0, 0).getTime() // 21 Nov 2026, 12:00:00
@@ -61,5 +61,27 @@ describe('formatDuration', () => {
 describe('parseBackendDateTime', () => {
   it('reads a LocalDateTime as local time', () => {
     expect(parseBackendDateTime('2026-11-21T12:00:00')).toBe(NOW)
+  })
+})
+
+describe('slaClock', () => {
+  it('counts down while the clock runs', () => {
+    const clock = slaClock(dueIn(90), null, false, NOW)
+    expect(clock.phase).toBe('running')
+    if (clock.phase === 'running') expect(clock.countdown.label).toBe('1h 30m')
+  })
+
+  it('is met when stopped at or before the deadline', () => {
+    expect(slaClock(dueIn(30), dueIn(10), false, NOW)).toEqual({ phase: 'met', label: 'Met' })
+    expect(slaClock(dueIn(30), dueIn(30), false, NOW).phase).toBe('met')
+  })
+
+  it('is missed when stopped after the deadline, or when the backend flagged a breach', () => {
+    expect(slaClock(dueIn(30), dueIn(31), false, NOW).phase).toBe('missed')
+    expect(slaClock(dueIn(30), dueIn(10), true, NOW).phase).toBe('missed')
+  })
+
+  it('has no clock without a deadline', () => {
+    expect(slaClock(null, null, false, NOW)).toEqual({ phase: 'none', label: 'No SLA' })
   })
 })

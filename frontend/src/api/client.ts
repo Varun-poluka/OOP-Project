@@ -1,5 +1,5 @@
 import { clearSession, readSession } from '@/auth/session'
-import { ApiError, NETWORK_ERROR_MESSAGE, toReadableMessage } from './errors'
+import { ApiError, NETWORK_ERROR_MESSAGE, parseFieldErrors, toReadableMessage } from './errors'
 import type { ProblemDetail } from './types'
 
 /** Backend base URL. Set VITE_API_URL in .env to override (Vite exposes only VITE_* vars). */
@@ -67,7 +67,14 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
 
   if (!response.ok) {
     const problem = await readProblem(response)
-    const apiError = new ApiError(response.status, toReadableMessage(response.status, problem), problem?.title)
+    const fieldErrors =
+      response.status === 400 && typeof problem?.detail === 'string' ? parseFieldErrors(problem.detail) : null
+    const apiError = new ApiError(
+      response.status,
+      toReadableMessage(response.status, problem),
+      problem?.title,
+      fieldErrors ?? {},
+    )
     if (response.status === 401 && options.skipUnauthorizedHandler !== true) {
       clearSession()
       if (unauthorizedHandler !== null) unauthorizedHandler()
