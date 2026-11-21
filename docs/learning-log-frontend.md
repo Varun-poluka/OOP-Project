@@ -495,6 +495,15 @@ frontend and backend work can happen in parallel without editing the same file.
     go out of sync because there is no second copy.
 
 - **Verification:** build, lint and tests pass. curl: `/api/categories` 200,
-  `/api/notifications/unread-count` 200. `/api/incidents/queue` returned 404 because the
-  running backend didn't have that change yet, so the browser walkthrough (two windows,
-  assign → queue updates live) is left for a manual check after the backend restart.
+  `/api/notifications/unread-count` 200, `/api/incidents/queue` 200 (after the backend
+  restart). Playwright with two separate browser contexts against the backend on 8080:
+  - Technician (Neha Network) on My queue, admin in the other context assigns INC-0002 to
+    her. The row appeared in her queue about 2.5 s later, with no reload, and her bell went
+    8 → 9 from the "notification" event.
+  - Acknowledge from the queue: the confirm dialog opened without opening the row; after
+    confirming, the row showed Acknowledged and offered Start work.
+  - At risk: the two breached incidents, 4044 % used before 417 %, each with a red bar.
+  - Notifications: only the new notification carries an incident id ("Open incident");
+    clicking it opened `/incidents/INC-0002` and marked it read (bell 9 → 8).
+  - No console warnings or errors. The Live → Reconnecting switch was not tested, because
+    that needs the backend stopped and restarted.
