@@ -63,7 +63,9 @@ export function MyQueuePage() {
       >
         {(incidents) => (
           <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full min-w-[52rem] text-left">
+            {/* min-w-[42rem] fits a tablet (820 px) without scrolling, so the action buttons stay
+                in view; narrower screens scroll the table sideways inside its border. */}
+            <table className="w-full min-w-[42rem] text-left">
               <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th scope="col" className="px-4 py-2.5 font-medium">Incident</th>

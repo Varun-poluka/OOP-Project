@@ -6,10 +6,12 @@ import {
   Cell,
   LabelList,
   Legend,
+  Rectangle,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
+  type BarShapeProps,
   type TooltipContentProps,
 } from 'recharts'
 import type { Priority } from '@/api/types'
@@ -37,6 +39,13 @@ const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 12 }
 const VALUE_LABEL = { fill: 'var(--foreground)', fontSize: 12 }
 /** Rounded only at the data end (right), square at the baseline. */
 const BAR_RADIUS: [number, number, number, number] = [0, 4, 4, 0]
+/**
+ * Recharts 3 skips zero-width bars, and their value label with them, so a 0 % or 0 row
+ * showed nothing at all. It keeps every bar that has a custom shape. This "custom" shape is
+ * Recharts' own default (Rectangle draws nothing at width 0), so bars look the same but
+ * the label ("0%", "No data", "0") is still written.
+ */
+const KEEP_ZERO_BARS = (props: BarShapeProps) => <Rectangle {...props} />
 
 /** A card with the chart's question as its title, the chart, and a data table for screen readers and checking. */
 export function ChartCard({
@@ -130,7 +139,7 @@ export function CountChart({ rows, labelWidth = 104 }: { rows: CountBar[]; label
           cursor={{ fill: 'var(--muted)' }}
           content={tooltipFor<CountBar>((row) => ({ title: row.label, lines: [`${row.count} incidents`] }))}
         />
-        <Bar dataKey="count" fill="var(--chart-1)" radius={BAR_RADIUS} isAnimationActive={false}>
+        <Bar dataKey="count" fill="var(--chart-1)" radius={BAR_RADIUS} isAnimationActive={false} shape={KEEP_ZERO_BARS}>
           <LabelList dataKey="count" position="right" style={VALUE_LABEL} />
         </Bar>
       </BarChart>
@@ -150,7 +159,7 @@ export function PriorityCountChart({ rows }: { rows: PriorityBar[] }) {
           cursor={{ fill: 'var(--muted)' }}
           content={tooltipFor<PriorityBar>((row) => ({ title: row.label, lines: [`${row.count} incidents`] }))}
         />
-        <Bar dataKey="count" radius={BAR_RADIUS} isAnimationActive={false}>
+        <Bar dataKey="count" radius={BAR_RADIUS} isAnimationActive={false} shape={KEEP_ZERO_BARS}>
           {rows.map((row) => (
             <Cell key={row.key} fill={row.priority === null ? UNCLASSIFIED_FILL : PRIORITY_FILL[row.priority]} />
           ))}
@@ -197,7 +206,7 @@ export function ComplianceChart({ rows }: { rows: ComplianceBar[] }) {
             ],
           }))}
         />
-        <Bar dataKey="width" radius={BAR_RADIUS} isAnimationActive={false}>
+        <Bar dataKey="width" radius={BAR_RADIUS} isAnimationActive={false} shape={KEEP_ZERO_BARS}>
           {data.map((row) => (
             <Cell key={row.priority} fill={PRIORITY_FILL[row.priority]} />
           ))}
@@ -231,10 +240,10 @@ export function WorkloadChart({ rows }: { rows: WorkloadBar[] }) {
           iconType="square"
           formatter={(value: string) => <span className="text-xs text-muted-foreground">{value}</span>}
         />
-        <Bar dataKey="open" name="Open" fill="var(--chart-1)" radius={BAR_RADIUS} isAnimationActive={false}>
+        <Bar dataKey="open" name="Open" fill="var(--chart-1)" radius={BAR_RADIUS} isAnimationActive={false} shape={KEEP_ZERO_BARS}>
           <LabelList dataKey="open" position="right" style={VALUE_LABEL} />
         </Bar>
-        <Bar dataKey="resolved" name="Resolved" fill="var(--chart-2)" radius={BAR_RADIUS} isAnimationActive={false}>
+        <Bar dataKey="resolved" name="Resolved" fill="var(--chart-2)" radius={BAR_RADIUS} isAnimationActive={false} shape={KEEP_ZERO_BARS}>
           <LabelList dataKey="resolved" position="right" style={VALUE_LABEL} />
         </Bar>
       </BarChart>

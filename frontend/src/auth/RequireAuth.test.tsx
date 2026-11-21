@@ -37,7 +37,9 @@ afterEach(() => {
 
 /** Alice is on /notifications when her session runs out; we end up on /login. */
 async function aliceSessionExpiresOnNotifications() {
-  saveSession({ token: 'fake-jwt', expiresAtMs: Date.now() + 300, user: ALICE })
+  // 1 s, not less: the page is lazy-loaded, and React shows it after a short Suspense delay,
+  // so the heading must appear before the session runs out.
+  saveSession({ token: 'fake-jwt', expiresAtMs: Date.now() + 1000, user: ALICE })
   const router = createMemoryRouter(routes, { initialEntries: ['/notifications'] })
   render(
     <QueryClientProvider client={new QueryClient()}>

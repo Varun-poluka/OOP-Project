@@ -3,18 +3,20 @@ import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/layout/AppShell'
 import { RootLayout } from '@/layout/RootLayout'
 import { LoginPage } from '@/pages/LoginPage'
-import { AssignmentStrategyPage } from '@/pages/admin/AssignmentStrategyPage'
-import { DashboardPage } from '@/pages/admin/DashboardPage'
-import { SearchPage } from '@/pages/admin/SearchPage'
-import { ServicesPage } from '@/pages/admin/ServicesPage'
-import { SlaPoliciesPage } from '@/pages/admin/SlaPoliciesPage'
-import { TechniciansPage } from '@/pages/admin/TechniciansPage'
-import { MyIncidentsPage } from '@/pages/employee/MyIncidentsPage'
-import { ReportIncidentPage } from '@/pages/employee/ReportIncidentPage'
-import { IncidentDetailPage } from '@/pages/shared/IncidentDetailPage'
-import { NotificationsPage } from '@/pages/shared/NotificationsPage'
-import { AtRiskPage } from '@/pages/technician/AtRiskPage'
-import { MyQueuePage } from '@/pages/technician/MyQueuePage'
+import {
+  AssignmentStrategyPage,
+  AtRiskPage,
+  DashboardPage,
+  IncidentDetailPage,
+  MyIncidentsPage,
+  MyQueuePage,
+  NotificationsPage,
+  ReportIncidentPage,
+  SearchPage,
+  ServicesPage,
+  SlaPoliciesPage,
+  TechniciansPage,
+} from '@/pages/lazyPages'
 
 // Nested routes: a parent's element renders its matched child at <Outlet/>.
 // RequireAuth checks login and role (see auth/roleHome.ts for which role sees which path),

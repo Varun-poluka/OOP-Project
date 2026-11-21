@@ -124,9 +124,11 @@ describe('role redirect after login', () => {
 
 describe('session expiry', () => {
   it('logs out when expiresAt passes, explains why, and returns to the page after login', async () => {
+    // 1 s, not less: the page is lazy-loaded, and React shows it after a short Suspense delay,
+    // so the heading must appear before the session runs out.
     saveSession({
       token: 'fake-jwt',
-      expiresAtMs: Date.now() + 300,
+      expiresAtMs: Date.now() + 1000,
       user: { id: 'u1', name: 'Test User', email: 'test@example.com', role: 'TECHNICIAN' },
     })
     const router = renderApp('/notifications')

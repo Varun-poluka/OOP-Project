@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { Link, Outlet, useMatch } from 'react-router'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
+import { LoadingState } from '@/components/LoadingState'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LiveUpdatesProvider } from '@/live/LiveUpdatesProvider'
@@ -88,7 +90,11 @@ export function AppShell() {
           </header>
 
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">
-            <Outlet />
+            {/* Pages are lazy-loaded (see router.tsx). Suspense shows the skeleton while a
+                page's file downloads; the sidebar and top bar stay on screen. */}
+            <Suspense fallback={<LoadingState label="Loading page…" />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

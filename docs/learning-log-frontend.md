@@ -630,3 +630,107 @@ frontend and backend work can happen in parallel without editing the same file.
 
   Restored afterwards: P4 policy, SKILL_BASED, Printing → Network. The time-travel
   breaches stay recorded: the backend has no undo for them.
+
+### 2026-11-21: Frontend slice F5 · Code splitting, end-to-end check, release v1.0
+
+- **What was built:**
+  - Every page except the login page is now lazy-loaded (route-level code splitting), so
+    Vite's "chunk larger than 500 kB" warning is gone.
+  - A Playwright run through the whole product with three roles, clicking like a user.
+  - Three small fixes it found (below), and the release tag `v1.0`.
+- **Why:** the first visit used to download all 13 pages, including the chart library
+  that only admins see. This slice also checks, before tagging the release, that the parts
+  built in F1-F4 still work together.
+
+- **Files:**
+  - `src/pages/lazyPages.ts` (new): one `lazy(...)` per page.
+  - `src/router.tsx`: imports the pages from `lazyPages.ts` instead of from each page file.
+  - `src/layout/AppShell.tsx`: `<Suspense>` around `<Outlet/>`.
+  - `src/features/dashboard/charts.tsx`: zero values now get their label (fix 1).
+  - `src/pages/technician/MyQueuePage.tsx`: the table fits a tablet (fix 2).
+  - `src/features/incident/AuditTimeline.tsx`: "SLA", not "Sla" (fix 3).
+  - `src/auth/RequireAuth.test.tsx`, `src/pages/LoginPage.test.tsx`: test sessions last 1 s
+    instead of 300 ms (see "Tests").
+
+- **Key concepts:**
+  - **Code splitting:** instead of one big JavaScript file, the build makes one file per
+    page. The browser downloads a page's file the first time someone opens that page.
+  - **`React.lazy`:** `lazy(() => import('./X'))` makes a component that loads its code the
+    first time it renders. `import()` used as a function (a "dynamic import") is what tells
+    Vite to put that file in its own chunk. `lazy` needs a *default* export and our pages
+    use named ones, so each import adds `.then((m) => ({ default: m.DashboardPage }))`.
+  - **`<Suspense fallback=...>`:** while a lazy page's file is still downloading, React shows
+    the fallback instead. It sits around `<Outlet/>` *inside* the shell, so the sidebar and
+    top bar stay on screen and only the page area shows the loading skeleton. LoginPage
+    stays a normal import because it is the first screen everyone sees.
+  - **Fast Refresh and `lazyPages.ts`:** Fast Refresh is Vite's hot reload that keeps a
+    component's state while you edit it. It only works when a file exports nothing but
+    components. `router.tsx` also exports `routes` and `router`, so the lazy components went
+    into their own file (the linter's `only-export-components` rule pointed this out).
+
+- **Bundle sizes (minified / gzip):**
+
+  | Chunk | Before | After |
+  |---|---|---|
+  | Main bundle (`index-*.js`), loaded by everyone | 1,197.20 kB / 359.66 kB | 480.28 kB / 151.55 kB |
+  | Dashboard (with Recharts), admins only | (in main) | 395.95 kB / 113.30 kB |
+  | Report incident (with the form libraries) | (in main) | 131.22 kB / 40.72 kB |
+  | Every other page | (in main) | 2 to 15 kB each |
+
+  The first download is 60 % smaller, and the 500 kB warning is gone without raising the
+  limit.
+
+- **Fixes found by the end-to-end run:**
+  1. *Zero bars had no label.* In "Are we resolving in time?", P2 and P4 (really 0 %) showed
+     an empty row. Recharts 3 drops any bar whose width is 0 *before* drawing it, and the
+     bar's label goes with it. That also hid the "No data" text the chart was written to
+     show. Recharts keeps every bar that has a custom `shape`, so all bars now pass
+     Recharts' own `Rectangle` as their shape. Bars look the same, but "0%", "No data" and
+     "0" are now written.
+  2. *Queue at tablet width.* The table had `min-w-[52rem]` (832 px), wider than the space
+     left on an 820 px tablet (about 706 px). It scrolled sideways inside its border, and the
+     Acknowledge / Start work buttons were cut in half. Measured in the browser, the content
+     needs about 687 px, so it is now `min-w-[42rem]`: no scroll at 820 px, and smaller
+     screens still scroll.
+  3. *"Sla resolution breached".* The history titles are built by lower-casing the action
+     name (`SLA_RESOLUTION_BREACHED`), which turned the acronym into "Sla". It is put back
+     to "SLA".
+
+- **Tests:** two session-expiry tests failed after the split. They give the user a
+  session that ends after 300 ms and expect the Notifications page to appear first.
+  - A lazy page always suspends on its first render. React 19 then holds the Suspense
+    reveal back for about 300 ms, so loading skeletons don't flicker.
+  - So the heading appeared at about the moment the session ended, and the logout won.
+  - The app was right; the 300 ms window had become too tight. The sessions now last 1 s,
+    still well inside the tests' 2 s wait.
+
+- **Verification:**
+  - Build: no size warning. Lint: no warnings. Tests: 231 pass, three runs in a row.
+  - Playwright against the backend on 8080 (demo data), with my own Vite server on 5174.
+    Its proxy forwarded `/api` and dropped the `Origin` header, because the backend's CORS
+    setting only allows 5173. The setup was a temporary config outside the repo.
+    - **Employee** (Asha) typed "Core switch in Library block flapping again". The
+      "Possibly already reported" panel showed INC-0032. Submitting created INC-0040,
+      raised to P1 (Network outage affects 11 services) and auto-assigned to Kiran.
+    - **Admin** (Ravi) opened INC-0040. Recommended technicians: #1 Kiran (current),
+      #2 Neha. Clicked Reassign on Neha and confirmed. Meanwhile **Neha's queue**, open in
+      a second browser context, showed INC-0040 **296 ms later, without reloading**.
+    - **Technician** (Neha): Acknowledge → Start work → note → Resolve with details. Each
+      step had its confirm dialog.
+    - **Employee**: her open INC-0040 page changed to Resolved by itself. She clicked
+      "Yes, it works" (Verified), then Close incident (Closed). The history shows every
+      step.
+    - **Admin dashboard:** 7 / 30 / 90 days switch the URL and the numbers, and 8 charts
+      render. 30 and 90 days match, because the demo data is about a month old.
+    - **Search:** "switch" found 3 results. Export CSV gave a file with BOM, CRLF and the
+      same 3 rows in the same order.
+    - **Services:** the Network impact graph shows 11 services across 4 hop columns.
+    - **Dark mode at tablet width (820 × 1180):** dashboard, incident detail and my queue.
+      All dark, no sideways page scroll; found fix 2 and fix 3.
+    - No console errors in any context.
+  - Not done, on purpose, to keep the demo data clean: time-travel SLA checks and changes to
+    policies or the assignment strategy. The run did add INC-0040 (now Closed) and one
+    reassignment.
+  - Seen but not changed: history details such as "Not resolved by
+    2026-11-21T19:50:49" show a raw timestamp. That text comes from the backend's audit
+    message, so changing it is a backend slice.

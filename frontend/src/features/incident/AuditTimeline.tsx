@@ -5,10 +5,12 @@ import { formatDateTime, formatRelative } from '@/lib/time'
 import { useNow } from '@/lib/useNow'
 import { Panel } from './Panel'
 
-/** "PRIORITY_RAISED" -> "Priority raised". */
+/** "PRIORITY_RAISED" -> "Priority raised"; "SLA_RESPONSE_BREACHED" -> "SLA response breached". */
 function humaniseAction(action: string): string {
   const words = action.replace(/_/g, ' ').toLowerCase()
-  return words.charAt(0).toUpperCase() + words.slice(1)
+  const sentence = words.charAt(0).toUpperCase() + words.slice(1)
+  // Lower-casing turned the acronym into "Sla"; put it back.
+  return sentence.replace(/\bsla\b/gi, 'SLA')
 }
 
 /** Everything that happened to the incident, newest first. */
