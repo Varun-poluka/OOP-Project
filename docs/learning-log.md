@@ -441,3 +441,91 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - `/api/notifications/unread-count` returned 200, `/api/categories` returned 200 sorted by name,
       `/api/technicians` returned 200 for the admin and 403 for the employee, and `/api/stream`
       without a token returned 401.
+
+---
+
+### 2026-11-21: Slice 5 · Demo data, technician queue, notification fix, diagrams and docs
+- **What was built:**
+  - A `demo` Spring profile that loads 15 users and 39 realistic incidents spread over 30 days.
+  - `GET /api/incidents/queue` (a technician's own work, most urgent first).
+  - A fix for notifications that never stored their incident id.
+  - A clearer message when an action is refused.
+  - Five Mermaid diagrams, `docs/patterns.md` and a full README.
+- **Why:** the video needs believable data from a clean start; the frontend needs the queue and
+  clickable notifications; the report needs diagrams and a pattern overview.
+- **Domain changes (each one approved):**
+  - `Notification` constructor: it received `incidentId` but never assigned it, so every notification
+    had `incidentId = null`. One line: `this.incidentId = incidentId;`.
+  - `InvalidStateTransitionException`: a second constructor `(from, action)` gives
+    "Cannot add a note while the incident is CLOSED". Before, a refused note said
+    "from CLOSED to CLOSED", because a note has no target status. `getTo()` is null in that case.
+- **Files:**
+  - `config/DemoDataLoader.java`: the demo data (`@Profile("demo")`, `@Order(2)`).
+  - `service/DemoDataStatus.java`: the "demo data ready" flag the SLA scheduler checks.
+  - `service/SlaScheduler.java`: skips its run while the flag is false.
+  - `config/DataSeeder.java`: `@Order(1)`; with the demo profile it skips its 4 sample users and
+    incident (the SLA policies and service graph are still seeded, the demo needs them).
+  - `resources/application-demo.properties`: SQL logging off for a readable console.
+  - `IncidentRepository`, `IncidentService`, `IncidentController`, `SecurityConfig`: the queue.
+    `atRisk()` and `queue()` share one comparator, `MOST_URGENT_FIRST`.
+  - `scripts/reset-demo-db.sh`: drops and recreates `itsm` after asking for confirmation.
+  - Tests: `NotificationTest`, `NotificationIntegrationTest`, `TechnicianQueueIntegrationTest`, two new
+    cases in `IncidentStateTransitionTest`, updated message in `IncidentConflictIntegrationTest`.
+  - `docs/diagrams/*.mmd` + `.svg` + `.png`, `docs/patterns.md`, `README.md`; the outdated
+    `docs/er-diagram.png` was removed.
+- **Key concepts:**
+  - **Spring profile:** a named switch for configuration. `@Profile("demo")` creates the bean only
+    when the profile is active, and `application-demo.properties` is read only then. Without the
+    profile the app behaves exactly as before.
+  - **`CommandLineRunner` and `@Order`:** Spring runs every `CommandLineRunner` once after startup.
+    `@Order(1)` / `@Order(2)` make `DataSeeder` run before `DemoDataLoader`.
+  - **Creating demo data through the real services:** every incident goes through
+    `IncidentService.report`, `acknowledge`, `resolve`, etc. So the audit trail, workloads and
+    notifications are exactly what the app produces. Two NEW incidents are the exception:
+    `report()` always classifies, so they are built with the domain constructor, like `DataSeeder` does.
+  - **Backdating with `JdbcTemplate`:** the domain stamps `LocalDateTime.now()`, so a 3-week-old story
+    would otherwise happen in one second. `JdbcTemplate` runs plain SQL. A helper `at(time, step)`
+    works like this:
+    - Before the step, it notes the highest id in `audit_record`, `investigation_note` and `notification`.
+    - It runs the step.
+    - It sets the time of every row with a larger id to `time`.
+    - After a report, `created_at` moves back, and the two SLA due times move by the same amount, so
+      each window keeps its policy length.
+    - The domain is not changed: "pretend this happened last week" belongs to demo data, not to an
+      incident. The loader is deliberately not `@Transactional`, so each service call commits and
+      the next call reloads the backdated values.
+  - **Real SLA flags:** at the end the loader calls `slaService.checkAll(now)`, so the domain itself
+    decides what is breached or at risk. Those audit rows and their notifications are then moved to
+    the due time (breach) or the 75% point (at risk).
+  - **Scheduler gate (race condition):**
+    - `SlaScheduler` runs on its own thread at startup and every 60 s.
+    - If it ran in the middle of a loader step, the SLA rows it adds would have an id above the
+      step's "before" id. The loader would then backdate them to the wrong time.
+    - `DemoDataStatus` holds an `AtomicBoolean`. It starts `false` with the demo profile (`true` without).
+    - The loader sets it to `true` in a `finally` block, so even a failed load never blocks the
+      scheduler for good. Until then the scheduler logs "SLA check skipped" and returns.
+    - `AtomicBoolean` instead of `boolean`: one thread writes and another reads, and a plain field is
+      not guaranteed to be seen by the other thread.
+  - **Mermaid:** diagrams written as text (`.mmd`) and rendered to SVG/PNG with
+    `npx @mermaid-js/mermaid-cli`. The text versions diff well in Git. Rendering needs a Chrome
+    binary; the system Chrome was passed with `-p puppeteer.json` (`executablePath`).
+- **How it was tested:**
+  - `./mvnw verify`: 236 tests pass, BUILD SUCCESS. A first run stopped with a Surefire
+    "dump files" error. It did not happen again on the immediate rerun, and the cause was not found.
+  - Line coverage is now 74.7% (was 84.9%). `DemoDataLoader` (about 600 lines) is not run by any
+    test; it was checked by running it instead.
+  - Demo profile on port 8081 against the scratch database `itsm_demo_check`:
+    `./mvnw spring-boot:run -Dspring-boot.run.profiles=demo -Dspring-boot.run.arguments="--server.port=8081 --spring.datasource.url=jdbc:postgresql://localhost:5432/itsm_demo_check"`.
+    - Log: "SLA check skipped: demo data is still loading", then "DemoDataLoader: loaded 39 demo
+      incidents". After that the scheduler ran normally.
+    - `GET /api/incidents` (admin): 39 incidents, every status, created 2026-10-23 to today. 5 were
+      BREACHED, 2 HIGH, 5 MEDIUM and 3 LOW risk.
+    - INC-0028 audit trail: CREATED 13:26 → ACKNOWLEDGED 13:46 → … → REASSIGNED 15:26 →
+      ACKNOWLEDGED 15:41. INC-0032 shows `PRIORITY_RAISED` P3 → P2 (Network has 11 dependents).
+    - INC-0026: `SLA_RESPONSE_BREACHED` at its response due time 13:26, `SLA_RESOLUTION_BREACHED` at 20:26.
+    - `GET /api/incidents/queue`: net.tech 200 (INC-0026 BREACHED first, then 88%, 51%, 21%);
+      employee 403; admin 403.
+    - `POST /api/incidents/INC-0003/notes` (CLOSED): 409 "Cannot add a note while the incident is CLOSED".
+    - `GET /api/users/U-EMP-1/notifications`: 27 notifications, 0 with a null `incidentId`, 10 unread.
+    - `POST /api/incidents/duplicates/check` with a Ram Bhawan Wi-Fi draft: found INC-0030.
+    - Database: no audit row has a timestamp in the future.
