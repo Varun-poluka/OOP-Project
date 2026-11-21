@@ -1,0 +1,51 @@
+---
+title: I-ITSM layered architecture
+---
+flowchart TB
+    subgraph Browser["Browser: React app (Vite, TypeScript)"]
+        UI["pages/ and features/<br/>employee, technician, admin screens"]
+        RQ["api/ client + TanStack Query<br/>(fetch with JWT, cache)"]
+        LIVE["live/ EventSource<br/>(SSE subscription)"]
+        AUTH["auth/ AuthProvider<br/>(token, role-based routes)"]
+        UI --> RQ
+        UI --> LIVE
+        UI --> AUTH
+    end
+
+    subgraph Backend["Spring Boot 4 backend (com.itsm)"]
+        SEC["config: SecurityConfig + JwtConfig<br/>JWT check, role rules per URL"]
+        subgraph CTRL["controller"]
+            C1["IncidentController, AdminController,<br/>ReportController, ServiceController,<br/>NotificationController, AuthController,<br/>ReferenceDataController"]
+            C2["LiveUpdateController (/api/stream)"]
+            GEH["GlobalExceptionHandler<br/>exceptions -> ProblemDetail"]
+        end
+        DTO["dto: request / response records"]
+        subgraph SVC["service"]
+            S1["IncidentService, SlaService, ReportService,<br/>NotificationService, AuthService, ..."]
+            S2["intelligence: duplicates, priority decorator,<br/>service impact, SLA risk, technician scores"]
+            S3["notification listeners (Observer)"]
+            S4["live: LiveUpdateRegistry"]
+            SCH["SlaScheduler (every 60 s)"]
+        end
+        subgraph DOM["domain"]
+            D1["entities: Incident, User hierarchy,<br/>Category, ITService, SLAPolicy, ..."]
+            D2["State classes, strategies, events,<br/>custom exceptions"]
+        end
+        REPO["repository: Spring Data JPA interfaces<br/>+ IncidentSpecifications"]
+        SEED["config: DataSeeder, DemoDataLoader (demo profile)"]
+    end
+
+    DB[("PostgreSQL 17<br/>itsm / itsm_test")]
+
+    RQ -- "REST JSON over HTTP<br/>Authorization: Bearer JWT" --> SEC
+    LIVE -- "SSE (text/event-stream)" --> SEC
+    SEC --> CTRL
+    CTRL --> DTO
+    CTRL --> SVC
+    SVC --> DOM
+    SVC --> REPO
+    REPO --> DOM
+    REPO -- "Hibernate / JDBC" --> DB
+    SEED --> SVC
+    SEED --> REPO
+    S4 -. "push after commit" .-> LIVE

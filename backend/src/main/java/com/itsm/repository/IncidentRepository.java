@@ -19,6 +19,7 @@ public interface IncidentRepository extends JpaRepository<Incident, String>, Jpa
     List<Incident> findByReporterId(String reporterId);
     List<Incident> findByReporterIdAndStatus(String reporterId, IncidentStatus status);
     List<Incident> findByAssignedTechnicianIdAndStatusNotIn(String technicianId, Collection<IncidentStatus> statuses);
+    List<Incident> findByAssignedTechnicianIdAndStatusIn(String technicianId, Collection<IncidentStatus> statuses);
     List<Incident> findByCreatedAtGreaterThanEqual(LocalDateTime from);
 
     long countByAssignedTechnicianIdAndCategoryNameAndStatusIn(String technicianId, String categoryName,

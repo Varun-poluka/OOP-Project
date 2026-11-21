@@ -20,9 +20,9 @@ abstract class IncidentState {
         throw refuse(IncidentStatus.IN_PROGRESS);
     }
 
-    // A note does not change the status, so the refused "target" is the current status.
+    // A note does not change the status, so the refusal names the action instead of a target status.
     void addNote(Incident incident, Technician tech, String text) {
-        throw refuse(getStatus());
+        throw new InvalidStateTransitionException(getStatus(), "add a note");
     }
 
     void resolve(Incident incident, Technician tech, String details) {

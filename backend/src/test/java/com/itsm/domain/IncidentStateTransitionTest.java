@@ -1,6 +1,7 @@
 package com.itsm.domain;
 
 import com.itsm.domain.exception.InvalidStateTransitionException;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -13,6 +14,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 // The State pattern as a table: every status x every action (8 x 10 = 80 cases).
@@ -144,5 +146,27 @@ class IncidentStateTransitionTest {
         assertEquals(from, ex.getFrom());
         assertEquals(from, fixture.incident.getStatus());
         assertEquals(auditBefore, fixture.incident.getAuditTrail().size());
+    }
+
+    // A note is not a status change, so the message names the refused action instead of a target.
+    @Test
+    void refusedNoteNamesTheAction() {
+        Fixture fixture = new Fixture().at(IncidentStatus.CLOSED);
+
+        InvalidStateTransitionException ex =
+                assertThrows(InvalidStateTransitionException.class, () -> Action.ADD_NOTE.apply(fixture));
+
+        assertEquals("Cannot add a note while the incident is CLOSED", ex.getMessage());
+        assertNull(ex.getTo());
+    }
+
+    @Test
+    void refusedStatusChangeNamesBothStatuses() {
+        Fixture fixture = new Fixture().at(IncidentStatus.CLOSED);
+
+        InvalidStateTransitionException ex =
+                assertThrows(InvalidStateTransitionException.class, () -> Action.RESOLVE.apply(fixture));
+
+        assertEquals("Cannot move incident from CLOSED to RESOLVED", ex.getMessage());
     }
 }

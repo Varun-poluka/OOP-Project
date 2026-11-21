@@ -1,0 +1,32 @@
+---
+title: Incident lifecycle (State pattern). Every other action is refused with 409 Conflict.
+---
+stateDiagram-v2
+    direction LR
+    [*] --> NEW : report (Employee, or Admin on behalf)
+    NEW --> CLASSIFIED : classify<br/>SYSTEM on report, or Admin
+    CLASSIFIED --> ASSIGNED : assign<br/>SYSTEM (strategy), or Admin
+    ASSIGNED --> ACKNOWLEDGED : acknowledge<br/>assigned Technician
+    ASSIGNED --> ASSIGNED : reassign<br/>Admin
+    ACKNOWLEDGED --> IN_PROGRESS : startWork<br/>assigned Technician
+    ACKNOWLEDGED --> ACKNOWLEDGED : addNote<br/>assigned Technician
+    ACKNOWLEDGED --> ASSIGNED : reassign<br/>Admin
+    IN_PROGRESS --> IN_PROGRESS : addNote<br/>assigned Technician
+    IN_PROGRESS --> RESOLVED : resolve<br/>assigned Technician
+    IN_PROGRESS --> ASSIGNED : reassign<br/>Admin
+    RESOLVED --> VERIFIED : verify<br/>reporter (Employee)
+    RESOLVED --> IN_PROGRESS : reopen with reason<br/>reporter (Employee)
+    VERIFIED --> CLOSED : close<br/>reporter or Admin
+    CLOSED --> [*]
+
+    note right of CLASSIFIED
+        report() classifies, starts the SLA and
+        asks the assignment strategy at once.
+        It stays CLASSIFIED only if no skilled
+        technician has free capacity.
+    end note
+    note right of CLOSED
+        Nothing is allowed. A note on a closed
+        incident gets "Cannot add a note while
+        the incident is CLOSED".
+    end note

@@ -21,3 +21,8 @@ dist/
 .env
 .env.*
 *.pem
+# Tooling and coverage output
+.playwright-mcp/
+frontend/.env
+coverage/
+frontend/coverage/

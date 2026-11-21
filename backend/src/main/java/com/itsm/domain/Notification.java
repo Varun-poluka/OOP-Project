@@ -25,6 +25,7 @@ public class Notification {
             throw new NullPointerException("Need an recipient");
         }
         this.recipient = recipient;
+        this.incidentId = incidentId;
         if(message == null || message.isBlank()){
             throw new IllegalArgumentException("Message cannot be blank");
         }

@@ -13,13 +13,19 @@ public class SlaScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(SlaScheduler.class);
     private final SlaService slaService;
+    private final DemoDataStatus demoDataStatus;
 
-    public SlaScheduler(SlaService slaService) {
+    public SlaScheduler(SlaService slaService, DemoDataStatus demoDataStatus) {
         this.slaService = slaService;
+        this.demoDataStatus = demoDataStatus;
     }
 
     @Scheduled(fixedRate = 60000)
     public void checkSlas() {
+        if (!demoDataStatus.isReady()) {
+            log.info("SLA check skipped: demo data is still loading");
+            return;
+        }
         SlaCheckResponse result = slaService.checkAll(LocalDateTime.now());
         if (result.breachesRecorded() > 0 || result.risksRecorded() > 0) {
             log.warn("SLA check: {} new breach(es), {} new at-risk warning(s)",

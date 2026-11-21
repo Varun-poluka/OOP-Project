@@ -29,6 +29,13 @@ public class IncidentService {
     private static final Set<String> SORTABLE_FIELDS = Set.of("createdAt", "priority", "status", "title");
     private static final List<IncidentStatus> FINISHED =
             List.of(IncidentStatus.RESOLVED, IncidentStatus.VERIFIED, IncidentStatus.CLOSED);
+    // A technician's own work: assigned to them and not yet resolved.
+    private static final List<IncidentStatus> WORKING =
+            List.of(IncidentStatus.ASSIGNED, IncidentStatus.ACKNOWLEDGED, IncidentStatus.IN_PROGRESS);
+    // Most urgent first: breached before everything else, then the highest share of the SLA window used.
+    private static final Comparator<IncidentResponse> MOST_URGENT_FIRST =
+            Comparator.comparing((IncidentResponse r) -> r.riskLevel() != RiskLevel.BREACHED)
+                    .thenComparing(r -> (r.slaPercentUsed() == null) ? 0 : r.slaPercentUsed(), Comparator.reverseOrder());
 
     private final IncidentRepository incidentRepository;
     private final UserRepository userRepository;
@@ -204,8 +211,22 @@ public class IncidentService {
                 result.add(response);
             }
         }
-        result.sort(Comparator.comparing((IncidentResponse r) -> r.riskLevel() != RiskLevel.BREACHED)
-                .thenComparing(r -> (r.slaPercentUsed() == null) ? 0 : r.slaPercentUsed(), Comparator.reverseOrder()));
+        result.sort(MOST_URGENT_FIRST);
+        return result;
+    }
+
+    // The caller's own work queue, most urgent running SLA clock first. Technicians only.
+    @Transactional(readOnly = true)
+    public List<IncidentResponse> queue(String actorId) {
+        User actor = findUser(actorId);
+        if (!(actor instanceof Technician)) {
+            throw new UnauthorizedActionException("Only technicians have a work queue");
+        }
+        List<IncidentResponse> result = new ArrayList<>();
+        for (Incident incident : incidentRepository.findByAssignedTechnicianIdAndStatusIn(actorId, WORKING)) {
+            result.add(IncidentResponse.from(incident));
+        }
+        result.sort(MOST_URGENT_FIRST);
         return result;
     }
 

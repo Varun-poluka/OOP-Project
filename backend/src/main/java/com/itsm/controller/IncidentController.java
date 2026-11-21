@@ -45,6 +45,11 @@ public class IncidentController {
         return incidentService.atRisk(jwt.getSubject());
     }
 
+    @GetMapping("/queue")
+    public List<IncidentResponse> queue(@AuthenticationPrincipal Jwt jwt) {
+        return incidentService.queue(jwt.getSubject());
+    }
+
     @GetMapping("/{id}/recommendations")
     public List<TechnicianRecommendationResponse> recommendations(@PathVariable String id) {
         return recommendationService.recommend(id);

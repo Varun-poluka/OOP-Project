@@ -1,0 +1,56 @@
+---
+title: Employee reports an incident (POST /api/incidents)
+---
+sequenceDiagram
+    autonumber
+    actor E as Employee (React app)
+    participant C as IncidentController
+    participant S as IncidentService
+    participant D as DuplicateService /<br/>TokenSimilarityDuplicateDetector
+    participant P as DependencyAwarePriorityCalculator<br/>(decorator)
+    participant W as WeightedPriorityCalculator
+    participant I as Incident (domain)
+    participant A as AssignmentStrategy<br/>(SkillBased / LoadBased)
+    participant R as IncidentRepository
+    participant EP as IncidentEventPublisher
+    participant L1 as InAppNotificationListener
+    participant L2 as EmailNotificationListener
+    participant L3 as LiveUpdateListener
+    participant SSE as LiveUpdateRegistry (SSE)
+
+    E->>C: POST /api/incidents (JWT, CreateIncidentRequest)
+    C->>S: report(request, actorId from token)
+    Note over S: @Transactional starts
+    S->>I: new Incident(...) status NEW, audit CREATED
+    S->>D: find(IncidentText, actor)
+    D-->>S: possible duplicates (hint only, never blocks)
+    S->>P: calculate(impact, urgency, service)
+    P->>W: calculate(impact, urgency, service)
+    W-->>P: base priority
+    P->>P: ServiceImpactAnalyzer: >= 3 dependents? raise one level
+    P-->>S: priority
+    S->>I: classify(priority) -> CLASSIFIED
+    S->>I: startSla(SLAPolicy) sets responseDueAt, resolutionDueAt
+    opt priority was raised / services impacted
+        S->>I: recordSystemEvent(PRIORITY_RAISED, SERVICE_IMPACT)
+    end
+    S->>A: selectTechnician(incident, available technicians)
+    A-->>S: Optional<Technician>
+    opt a technician was chosen
+        S->>I: assignTo(tech) -> ASSIGNED, tech.activeIncidents + 1
+    end
+    S->>R: save(incident)
+    S->>EP: publishNewEvents(incident, 0)
+    loop one IncidentEvent per new audit record
+        EP->>L1: onIncidentEvent
+        L1->>L1: save Notification rows (NotificationRules)
+        EP->>L2: onIncidentEvent
+        L2->>L2: log [EMAIL] lines
+        EP->>L3: onIncidentEvent
+        L3->>L3: build payload, register afterCommit
+    end
+    S-->>C: IncidentResponse + possibleDuplicates
+    Note over S: transaction commits
+    L3->>SSE: afterCommit: send "incident" and "notification" events
+    SSE-->>E: Server-Sent Events to reporter, technician, admins
+    C-->>E: 201 Created (JSON)

@@ -58,6 +58,8 @@ public class SecurityConfig {
                                 .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/services", "/api/services/*/dependencies/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/services/*/dependencies/*").hasRole("ADMIN")
+                        // Technician only: the caller's own work queue
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/queue").hasRole("TECHNICIAN")
                         // Technicians and admins (a technician only sees their own at-risk incidents)
                         .requestMatchers(HttpMethod.GET, "/api/incidents/at-risk", "/api/services/*/impact")
                                 .hasAnyRole("TECHNICIAN", "ADMIN")

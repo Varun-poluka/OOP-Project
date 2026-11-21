@@ -3,11 +3,15 @@ package com.itsm.config;
 import com.itsm.domain.*;
 import com.itsm.repository.*;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+// Runs first (@Order(1)): DemoDataLoader (@Order(2)) needs the SLA policies and the service graph.
 @Component
+@Order(1)
 public class DataSeeder implements CommandLineRunner {
 
     // Demo password for every seeded user (listed in README). Only its BCrypt hash is stored.
@@ -20,6 +24,7 @@ public class DataSeeder implements CommandLineRunner {
     private final IncidentRepository incidentRepository;
     private final SLAPolicyRepository slaPolicyRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Environment environment;
 
     public DataSeeder(UserRepository userRepository,
                       TechnicianRepository technicianRepository,
@@ -27,7 +32,8 @@ public class DataSeeder implements CommandLineRunner {
                       ITServiceRepository itServiceRepository,
                       IncidentRepository incidentRepository,
                       SLAPolicyRepository slaPolicyRepository,
-                      PasswordEncoder passwordEncoder){
+                      PasswordEncoder passwordEncoder,
+                      Environment environment){
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
         this.categoryRepository = categoryRepository;
@@ -35,6 +41,7 @@ public class DataSeeder implements CommandLineRunner {
         this.incidentRepository = incidentRepository;
         this.slaPolicyRepository = slaPolicyRepository;
         this.passwordEncoder = passwordEncoder;
+        this.environment = environment;
     }
 
     @Override
@@ -49,6 +56,8 @@ public class DataSeeder implements CommandLineRunner {
         if(userRepository.count() > 0){
             backfillPasswordHashes();
             System.out.println("DataSeeder: users already exist, skipping demo users and incident");
+        } else if (environment.matchesProfiles("demo")) {
+            System.out.println("DataSeeder: demo profile active, DemoDataLoader seeds users and incidents");
         } else {
             seedDemoData();
         }

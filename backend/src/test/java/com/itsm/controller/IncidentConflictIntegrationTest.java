@@ -49,6 +49,6 @@ class IncidentConflictIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"one more thing\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value("Cannot move incident from CLOSED to CLOSED"));
+                .andExpect(jsonPath("$.detail").value("Cannot add a note while the incident is CLOSED"));
     }
 }

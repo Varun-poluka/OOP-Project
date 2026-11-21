@@ -1,0 +1,163 @@
+---
+title: I-ITSM domain model (com.itsm.domain and the intelligence decorator)
+---
+classDiagram
+    direction TB
+
+    class User {
+        <<abstract>>
+        -String id
+        -String name
+        -String email
+        -String passwordHash
+        +getRole()* String
+    }
+    class Employee
+    class Administrator
+    class Technician {
+        -Set~Category~ skills
+        -int maxWorkload
+        -int activeIncidents
+        -boolean available
+        +hasSkill(Category) boolean
+        +canTakeMoreWork() boolean
+        ~addIncident()
+        ~removeIncident()
+    }
+    User <|-- Employee
+    User <|-- Administrator
+    User <|-- Technician
+
+    class Incident {
+        -String id
+        -String title
+        -Impact impact
+        -Urgency urgency
+        -Priority priority
+        -IncidentStatus status
+        -LocalDateTime createdAt
+        -LocalDateTime responseDueAt
+        -LocalDateTime resolutionDueAt
+        +classify(Priority, User)
+        +assignTo(Technician, User)
+        +acknowledge(Technician)
+        +startWork(Technician)
+        +addNote(Technician, String)
+        +resolve(Technician, String)
+        +verify(Employee)
+        +close(User)
+        +reopen(Employee, String)
+        +reassign(Technician, User)
+        +startSla(SLAPolicy)
+        +checkSla(LocalDateTime) boolean
+        +checkSlaRisk(LocalDateTime) boolean
+    }
+    class Category {
+        -String name
+        -String description
+    }
+    class ITService {
+        -Long id
+        -String name
+        -int businessCriticality
+        +addDependency(ITService)
+    }
+    class SLAPolicy {
+        -Priority priority
+        -int responseMinutes
+        -int resolutionMinutes
+    }
+    class AuditRecord {
+        -LocalDateTime timestamp
+        -String action
+        -IncidentStatus previousStatus
+        -IncidentStatus newStatus
+    }
+    class InvestigationNote {
+        -String text
+        -LocalDateTime createdAt
+    }
+    class Notification {
+        -String incidentId
+        -String message
+        -boolean read
+        +markAsRead()
+    }
+
+    Incident --> "1" Employee : reporter
+    Incident --> "0..1" Technician : assignedTechnician
+    Incident --> "1" Category
+    Incident --> "1" ITService : affectedService
+    Incident *-- "*" AuditRecord : auditTrail
+    Incident *-- "*" InvestigationNote : notes
+    AuditRecord --> "0..1" User : actor (null = SYSTEM)
+    InvestigationNote --> "1" Technician : author
+    Notification --> "1" User : recipient
+    Technician --> "*" Category : skills
+    ITService --> "*" ITService : dependsOn
+
+    %% State pattern
+    class IncidentState {
+        <<abstract>>
+        ~getStatus()* IncidentStatus
+        ~classify() / assign() / acknowledge() ...
+        #refuse(IncidentStatus) InvalidStateTransitionException
+    }
+    class IncidentStates {
+        <<final>>
+        ~of(IncidentStatus)$ IncidentState
+    }
+    IncidentState <|-- NewState
+    IncidentState <|-- ClassifiedState
+    IncidentState <|-- AssignedState
+    IncidentState <|-- AcknowledgedState
+    IncidentState <|-- InProgressState
+    IncidentState <|-- ResolvedState
+    IncidentState <|-- VerifiedState
+    IncidentState <|-- ClosedState
+    Incident ..> IncidentStates : state()
+    IncidentStates o-- IncidentState : one shared instance per status
+
+    %% Strategy pattern
+    class AssignmentStrategy {
+        <<interface>>
+        +getName() String
+        +selectTechnician(Incident, List~Technician~) Optional~Technician~
+    }
+    AssignmentStrategy <|.. SkillBasedAssignmentStrategy
+    AssignmentStrategy <|.. LoadBasedAssignmentStrategy
+
+    %% Strategy + Decorator
+    class PriorityCalculator {
+        <<interface>>
+        +calculate(Impact, Urgency, int) Priority
+        +calculate(Impact, Urgency, ITService) Priority
+    }
+    class DependencyAwarePriorityCalculator {
+        -PriorityCalculator inner
+        -ServiceImpactAnalyzer analyzer
+        +calculate(Impact, Urgency, ITService) Priority
+    }
+    PriorityCalculator <|.. WeightedPriorityCalculator
+    PriorityCalculator <|.. DependencyAwarePriorityCalculator
+    DependencyAwarePriorityCalculator o--> PriorityCalculator : wraps (inner)
+
+    %% Observer pattern
+    class IncidentEvent {
+        <<record>>
+        +from(Incident, AuditRecord)$ IncidentEvent
+    }
+    class IncidentEventListener {
+        <<interface>>
+        +onIncidentEvent(IncidentEvent)
+    }
+    class IncidentEventPublisher {
+        -List~IncidentEventListener~ listeners
+        +publishNewEvents(Incident, int)
+    }
+    IncidentEventPublisher o--> "*" IncidentEventListener
+    IncidentEventPublisher ..> IncidentEvent : creates
+    IncidentEventListener <|.. InAppNotificationListener
+    IncidentEventListener <|.. EmailNotificationListener
+    IncidentEventListener <|.. LiveUpdateListener
+    InAppNotificationListener ..> Notification : saves
