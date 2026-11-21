@@ -1,5 +1,5 @@
 import type { IncidentResponse } from '@/api/types'
-import { slaCountdown, type SlaState } from '@/lib/sla'
+import { parseBackendDateTime, slaCountdown, type SlaState } from '@/lib/sla'
 
 export type ClockInput = {
   kind: 'response' | 'resolution'
@@ -76,4 +76,19 @@ export function mostUrgentClock(incident: ClockFields, nowMs: number): UrgentClo
   if (best === null) return { kind: null, state: 'none', label: 'No SLA' }
   const verb = best.kind === 'response' ? 'Respond' : 'Resolve'
   return { kind: best.kind, state: best.state, label: `${verb} in ${best.text}` }
+}
+
+/**
+ * How long past its deadline the most overdue *running* clock is, in ms; null when no running
+ * clock is past due. Stopped clocks don't count: their lateness is fixed history, not "overdue".
+ */
+export function runningOverdueMs(incident: ClockFields, nowMs: number): number | null {
+  let worst: number | null = null
+  for (const clock of [responseClock(incident), resolutionClock(incident)]) {
+    if (clock.dueAt === null || clock.stoppedAt !== null) continue
+    const overdue = nowMs - parseBackendDateTime(clock.dueAt)
+    if (Number.isNaN(overdue) || overdue <= 0) continue
+    if (worst === null || overdue > worst) worst = overdue
+  }
+  return worst
 }

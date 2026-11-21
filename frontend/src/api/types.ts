@@ -195,6 +195,9 @@ export type ServiceResponse = {
   openIncidentCount: number
 }
 
+/** POST /api/services. dependsOnIds is optional: services the new one depends on. */
+export type CreateServiceRequest = { name: string; businessCriticality: number; dependsOnIds?: number[] }
+
 /** Services that depend (directly or indirectly) on the given one; distance = hops away. */
 export type ImpactResponse = {
   serviceId: number
@@ -206,6 +209,18 @@ export type ImpactResponse = {
 // ---- Categories ----
 
 export type CategoryResponse = { name: string; description: string }
+
+// ---- Technicians ----
+
+/** GET /api/technicians (admin only). activeIncidents counts towards maxWorkload. */
+export type TechnicianResponse = {
+  id: string
+  name: string
+  skills: string[]
+  available: boolean
+  activeIncidents: number
+  maxWorkload: number
+}
 
 // ---- Notifications ----
 
@@ -249,6 +264,7 @@ export type SlaCheckResponse = { checkedAt: LocalDateTimeString; breachesRecorde
 
 // ---- Reports ----
 
+/** One GROUP BY row; byPriority uses the key 'UNCLASSIFIED' for incidents without a priority. */
 export type CountRow = { key: string; count: number }
 
 /** Compliance values are percentages (0-100); all four are null when there is no data. */
@@ -278,4 +294,8 @@ export type ReportSummary = {
   overall: SlaSummary
   byPriorityPerformance: Partial<Record<Priority, SlaSummary>>
   technicians: TechnicianWorkload[]
+  /** Every unfinished incident right now (not limited to from/to). */
+  openIncidents: number
+  /** The same "right now" count split by priority. */
+  openByPriority: Record<Priority, number>
 }

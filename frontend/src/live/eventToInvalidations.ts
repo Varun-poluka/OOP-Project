@@ -25,7 +25,14 @@ export function eventToInvalidations(event: LiveEvent, userId: string): CacheUpd
     const incidentId = readString(event.data, 'incidentId')
     if (incidentId === null) return NOTHING
     return {
-      invalidate: [queryKeys.incident(incidentId), queryKeys.incidentLists(), queryKeys.queue(), queryKeys.atRisk()],
+      // reports(): the admin dashboard's figures change with every incident event.
+      invalidate: [
+        queryKeys.incident(incidentId),
+        queryKeys.incidentLists(),
+        queryKeys.queue(),
+        queryKeys.atRisk(),
+        queryKeys.reports(),
+      ],
       set: [],
     }
   }

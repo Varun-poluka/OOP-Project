@@ -18,5 +18,12 @@ export const queryKeys = {
   // Its own prefix (not under ['notifications']): refetching the list must not refetch the count we just set.
   unreadCount: (userId: string) => ['unread-count', userId] as const,
   services: () => ['services'] as const,
+  serviceImpact: (id: number) => ['services', 'impact', id] as const,
+  // Prefix for every report range, so a live event can refresh whichever range is on screen.
+  reports: () => ['reports'] as const,
+  report: (from: string, to: string) => ['reports', from, to] as const,
+  slaPolicies: () => ['admin', 'sla-policies'] as const,
+  strategy: () => ['admin', 'strategy'] as const,
+  technicians: () => ['technicians'] as const,
   categories: () => ['categories'] as const,
 }

@@ -3,7 +3,7 @@ import { queryKeys } from '@/api/queryKeys'
 import { eventToInvalidations } from './eventToInvalidations'
 
 describe('eventToInvalidations', () => {
-  it('"incident" refreshes that incident, every list, the queue and at-risk', () => {
+  it('"incident" refreshes that incident, every list, the queue, at-risk and reports', () => {
     const update = eventToInvalidations(
       { type: 'incident', data: { incidentId: 'INC-7', action: 'ASSIGNED', status: 'ASSIGNED', priority: 'P1', riskLevel: 'LOW' } },
       'u1',
@@ -13,6 +13,7 @@ describe('eventToInvalidations', () => {
       queryKeys.incidentLists(),
       queryKeys.queue(),
       queryKeys.atRisk(),
+      queryKeys.reports(),
     ])
     expect(update.set).toEqual([])
   })

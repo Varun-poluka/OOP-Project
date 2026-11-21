@@ -11,12 +11,15 @@ import { RiskBadge } from '@/components/RiskBadge'
 import { SlaUsageBar } from '@/components/SlaUsageBar'
 import { StatusBadge } from '@/components/StatusBadge'
 import { UrgentClockBadge } from '@/components/UrgentClockBadge'
+import { runningOverdueMs } from '@/features/incident/slaClocks'
 import { sortAtRisk } from '@/features/incidents/atRisk'
+import { useNow } from '@/lib/useNow'
 import { usePollWhileOffline } from '@/live/useLiveStatus'
 
 /** Incidents whose SLA is breached or close to it, worst first. */
 export function AtRiskPage() {
   const navigate = useNavigate()
+  const now = useNow()
   const atRisk = useQuery({
     queryKey: queryKeys.atRisk(),
     queryFn: incidentsApi.atRisk,
@@ -89,7 +92,10 @@ export function AtRiskPage() {
                         {incident.slaPercentUsed === null ? (
                           <span className="text-xs text-muted-foreground">No running clock</span>
                         ) : (
-                          <SlaUsageBar percent={incident.slaPercentUsed} />
+                          <SlaUsageBar
+                            percent={incident.slaPercentUsed}
+                            overdueMs={runningOverdueMs(incident, now)}
+                          />
                         )}
                       </td>
                       <td className="px-4 py-3">

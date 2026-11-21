@@ -2,12 +2,14 @@ import type { IncidentResponse } from '@/api/types'
 import { SlaClockBadge } from '@/components/SlaClockBadge'
 import { SlaUsageBar } from '@/components/SlaUsageBar'
 import { formatDateTime } from '@/lib/time'
+import { useNow } from '@/lib/useNow'
 import { Panel } from './Panel'
-import { resolutionClock, responseClock, type ClockInput } from './slaClocks'
+import { resolutionClock, responseClock, runningOverdueMs, type ClockInput } from './slaClocks'
 
 /** Both SLA clocks, with their deadlines and how much of the running window is used. */
 export function SlaPanel({ incident }: { incident: IncidentResponse }) {
   const used = incident.slaPercentUsed
+  const now = useNow()
   return (
     <Panel title="SLA">
       <dl className="space-y-4">
@@ -15,7 +17,12 @@ export function SlaPanel({ incident }: { incident: IncidentResponse }) {
         <ClockRow title="Resolution" clock={resolutionClock(incident)} stoppedLabel="Resolved" />
       </dl>
       {used !== null && (
-        <SlaUsageBar percent={used} caption="Time used on the current clock" className="mt-4 border-t pt-4" />
+        <SlaUsageBar
+          percent={used}
+          overdueMs={runningOverdueMs(incident, now)}
+          caption="Time used on the current clock"
+          className="mt-4 border-t pt-4"
+        />
       )}
     </Panel>
   )

@@ -52,7 +52,9 @@ function successMessage(command: ActionCommand, incident: IncidentResponse): str
     case 'reassign':
       return `Reassigned to ${command.technicianName}`
     case 'acknowledge':
-      return 'Acknowledged: the response SLA is met'
+      // Only mention the SLA when there is one, and only claim "met" when it really was.
+      if (incident.responseDueAt === null) return 'Acknowledged'
+      return incident.responseBreached ? 'Acknowledged (after the response deadline)' : 'Acknowledged: the response SLA is met'
     case 'start':
       return 'Work started'
     case 'addNote':

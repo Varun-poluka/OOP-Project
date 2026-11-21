@@ -507,3 +507,126 @@ frontend and backend work can happen in parallel without editing the same file.
     clicking it opened `/incidents/INC-0002` and marked it read (bell 9 → 8).
   - No console warnings or errors. The Live → Reconnecting switch was not tested, because
     that needs the backend stopped and restarted.
+
+### 2026-11-21: Frontend slice F4 · Admin screens and small fixes
+
+- **What was built:**
+  - *Dashboard (`/admin`):* a 7 / 30 / 90-day range kept in the URL, six KPI tiles and five
+    bar charts from `GET /api/reports/summary`, plus a "Needs attention" list (top 5 from
+    `GET /api/incidents/at-risk`). "Open incidents" and "Open P1" are **right now** (the new
+    backend fields `openIncidents` / `openByPriority`). The rest are **in the selected range**.
+    A value the backend sends as null shows "No data", never 0. The figures refresh on
+    every live "incident" event.
+  - *Search (`/admin/search`):* all nine filters, paging and sort in the URL, the same
+    result table as My incidents, and "Export CSV" of every match (up to 1000 rows).
+  - *SLA policies (`/admin/sla`):* P1–P4 with inline edit and validation, and a "Run SLA
+    check" panel, either now or "as if" at a chosen future time (time travel for the demo).
+  - *Assignment strategy (`/admin/strategy`):* the two strategies explained, switching
+    after a confirm.
+  - *Services (`/admin/services`):* catalogue table, create service, add / remove
+    dependency (the backend's 400 message for a self or duplicate dependency is shown in
+    the dialog), and an impact explorer: an SVG graph with columns by hop distance, plus a list.
+  - *Technicians (`/admin/technicians`):* skills, availability, active / max workload bar.
+  - *Fixes:*
+    - The SLA bar says "Overdue by 1d 5h" past 100 % and stays full.
+    - The acknowledge toast mentions the response SLA only when the incident has one.
+    - The placeholder and sample-data helpers are deleted.
+- **Why:** the admin role had only placeholder pages. Now every admin endpoint of the
+  backend has a screen, and the Strategy pattern (assignment) and the service dependency
+  graph can be shown live in the demo.
+
+- **Files:**
+  - *API:* `types.ts` (`TechnicianResponse`, `CreateServiceRequest`, the new report fields),
+    `services.ts` (create / add / remove dependency), `technicians.ts`, `queryKeys.ts`,
+    `useReferenceData.ts` (`useTechnicians`). `live/eventToInvalidations.ts` now also
+    refreshes `['reports']`.
+  - *Pure logic (each with a test file):*
+    - `features/dashboard/reportCharts.ts` and `dashboardRange.ts`
+    - `features/search/searchParams.ts`
+    - `lib/csv.ts`
+    - `features/sla/policyValidation.ts`
+    - `features/services/impactLayout.ts`
+    - `lib/dates.ts`
+    - `runningOverdueMs` in `features/incident/slaClocks.ts`
+  - *Components:*
+    - `features/dashboard/charts.tsx` (Recharts charts and `ChartCard`)
+    - `features/services/ImpactGraph.tsx`, `features/search/incidentCsv.ts`
+    - `components/FilterSelect.tsx` (moved out of My incidents) and `DebouncedInput.tsx`
+    - `SlaUsageBar.tsx` (overdue text)
+  - *Pages:* `pages/admin/*.tsx` (5 rewritten, `TechniciansPage.tsx` new), `router.tsx`,
+    `layout/nav.ts`.
+  - *Theme:* `index.css` got `--chart-1` / `--chart-2` (blue and aqua, light and dark).
+    Priority bars reuse `--p1`…`--p4`.
+  - *Dependency:* `recharts` 3.10.1.
+  - *Tests:* 231 in total.
+
+- **Key concepts:**
+  - **Data transform vs. drawing:** a chart component should only decide *how* to draw.
+    *What* to count is decided by pure functions in `reportCharts.ts`, for example:
+    - every status in lifecycle order, with zeros
+    - P1–P4, then "Unclassified" only if there are some
+    - compliance kept as `null` when there's nothing to measure
+
+    Pure functions are easy to unit-test without a browser. A mistake like "null shown as
+    0 %" is caught by a test, not by an admin.
+  - **Chart rules we followed:**
+    - one question per chart, asked by the title ("Are we resolving in time?")
+    - horizontal bars, so long labels stay readable
+    - the number written at every bar end, so colour is never the only way to read a value
+    - priority colours from the same CSS variables as the badges, so dark mode switches
+      them automatically
+    - a legend only where there are two series
+    - exact values in the tooltip
+    - a "Show as table" view under each chart
+
+    The two series colours were checked with a colour-blindness validator, in both themes.
+  - **URL state:** filters and the date range live in the query string, not in React
+    state. The URL is the single source of truth: pure `read…` / `write…` functions
+    translate it both ways, and any change is a navigation. So a reload, a bookmark or
+    the Back button all just work. Invalid values in a hand-edited URL fall back to "no
+    filter" instead of crashing.
+  - **Exclusive end dates:** the backend counts `createdAt >= from` and `< to`. To include
+    the whole last day, "to 20 Nov" is sent as midnight at the start of 21 Nov. `addDays`
+    uses the `Date` constructor, which rolls 30 Nov + 1 day over to 1 Dec correctly.
+  - **CSV escaping (RFC 4180):**
+    - a cell with a comma, quote or line break is wrapped in quotes, with inner quotes
+      doubled
+    - lines end in CRLF
+    - text starting with `=`, `+`, `-` or `@` gets a leading `'`, so a spreadsheet won't
+      run it as a formula ("CSV injection")
+    - a BOM at the start tells Excel the file is UTF-8
+  - **Deterministic graph layout:** the backend's impact search is a breadth-first search
+    (BFS), so each service has a hop distance.
+    - **Placement:** column = distance; rows inside a column are sorted by name. The same
+      data always gives the same picture, whatever order the API used (a test checks this
+      by reversing the input).
+    - **Edges:** an edge to the next column is how BFS first reached a service (solid).
+      Any other edge reaches an already-visited service: a cycle, or a second path. It is
+      drawn dashed.
+    - **Routing:** edges only run through empty space (the gaps between columns and a
+      lane under all the boxes), so no line crosses a box.
+  - **Using the server's answer vs. refetching:** after saving a policy we write the
+    server's *answer* into the cache with `setQueryData` (no refetch). After a dependency
+    change we invalidate `['services']`, so the list and every impact result refetch.
+
+- **Verification:** build, lint (no warnings) and 231 tests pass. curl
+  `GET /api/reports/summary` shows `openIncidents: 17` and
+  `openByPriority: {P1: 1, P2: 3, P3: 9, P4: 2}`. Playwright against 8080 as admin:
+  - Dashboard: tiles 17 / 1 "right now", all charts, needs-attention list, 90-day range
+    from the URL, readable in dark mode, tooltip with exact values. One fix: the date range
+    under each tile wrapped badly, so the tiles now say "In the selected range".
+  - Search with `?priority=P3&breached=yes&sort=priority`: 3 results; Export CSV gave a
+    file with BOM, CRLF and the same 3 rows in the same order.
+  - SLA: 500 / 300 rejected ("Must be at least the response time"). P4 resolution 1440 →
+    2880 saved. Time-travel check at 22 Nov 12:00 recorded 10 breaches and 1 risk.
+  - Strategy: confirm dialog, then switched to LOAD_BASED.
+  - Services:
+    - Network impact graph: 11 services across 3 columns. The first version's dashed edges
+      crossed boxes, so they were rerouted through the gaps.
+    - Self and duplicate dependency showed the backend's 400 messages in the dialog.
+    - Removing Printing → Network refreshed the table and the graph.
+  - Technicians page.
+  - As technician Neha: At risk shows "Overdue by 1d 5h" on INC-0026.
+
+  Restored afterwards: P4 policy, SKILL_BASED, Printing → Network. The time-travel
+  breaches stay recorded: the backend has no undo for them.

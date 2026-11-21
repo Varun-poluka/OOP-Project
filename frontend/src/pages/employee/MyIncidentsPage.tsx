@@ -6,11 +6,11 @@ import { incidentsApi } from '@/api/incidents'
 import { queryKeys } from '@/api/queryKeys'
 import { INCIDENT_STATUSES, PRIORITIES } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
+import { ALL, FilterSelect } from '@/components/FilterSelect'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { IncidentTable, Pager } from '@/features/incidents/IncidentTable'
 import {
   PAGE_SIZE,
@@ -23,8 +23,6 @@ import {
   type SortKey,
 } from '@/features/incidents/listParams'
 import { PRIORITY_LABEL, STATUS_LABEL } from '@/lib/labels'
-
-const ALL = 'ALL' // Select items cannot have an empty value, so "no filter" is this sentinel.
 
 export function MyIncidentsPage() {
   // The URL is the single source of truth for the filters.
@@ -168,36 +166,6 @@ export function MyIncidentsPage() {
           </div>
         )}
       </QueryState>
-    </div>
-  )
-}
-
-type FilterSelectProps = {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string }[]
-  /** When set, adds a first "All …" option meaning "no filter". */
-  allLabel?: string
-}
-
-function FilterSelect({ label, value, onChange, options, allLabel }: FilterSelectProps) {
-  return (
-    <div className="space-y-1">
-      <span className="block text-xs text-muted-foreground">{label}</span>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 w-44" aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {allLabel !== undefined && <SelectItem value={ALL}>{allLabel}</SelectItem>}
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
     </div>
   )
 }

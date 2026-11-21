@@ -118,6 +118,11 @@
     --phase-active: oklch(0.55 0.09 196);
     --phase-resolved: oklch(0.55 0.12 155);
     --phase-closed: oklch(0.7 0.01 255);
+
+    /* Chart series without their own meaning colour (counts, open vs resolved).
+       Blue then aqua: a pair checked for colour-blind separation. Priority charts use --p1..--p4. */
+    --chart-1: #2a78d6;
+    --chart-2: #1baf7a;
 }
 
 .dark {
@@ -156,6 +161,9 @@
     --phase-active: oklch(0.74 0.1 190);
     --phase-resolved: oklch(0.74 0.12 155);
     --phase-closed: oklch(0.55 0.01 255);
+
+    --chart-1: #3987e5;
+    --chart-2: #199e70;
 }
 
 @layer base {

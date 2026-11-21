@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mostUrgentClock } from './slaClocks'
+import { mostUrgentClock, runningOverdueMs } from './slaClocks'
 
 // "Now" for every test; the backend sends LocalDateTime strings without a timezone.
 const NOW = new Date(2026, 10, 21, 10, 0, 0).getTime()
@@ -69,5 +69,25 @@ describe('mostUrgentClock', () => {
     expect(
       mostUrgentClock({ ...base, responseDueAt: at(-60), acknowledgedAt: at(-70), resolutionDueAt: at(10), resolvedAt: at(-5) }, NOW).label,
     ).toBe('No SLA')
+  })
+})
+
+describe('runningOverdueMs', () => {
+  it('is null when every running clock still has time', () => {
+    expect(runningOverdueMs({ ...base, responseDueAt: at(10), resolutionDueAt: at(100) }, NOW)).toBeNull()
+  })
+
+  it('is how far past due the most overdue running clock is', () => {
+    const incident = { ...base, responseDueAt: at(-30), resolutionDueAt: at(-90) }
+    expect(runningOverdueMs(incident, NOW)).toBe(90 * 60_000)
+  })
+
+  it('ignores a stopped clock, even one that finished late', () => {
+    const incident = { ...base, responseDueAt: at(-60), acknowledgedAt: at(-10), resolutionDueAt: at(30) }
+    expect(runningOverdueMs(incident, NOW)).toBeNull()
+  })
+
+  it('is null without any SLA', () => {
+    expect(runningOverdueMs(base, NOW)).toBeNull()
   })
 })

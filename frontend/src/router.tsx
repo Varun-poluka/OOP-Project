@@ -8,6 +8,7 @@ import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { SearchPage } from '@/pages/admin/SearchPage'
 import { ServicesPage } from '@/pages/admin/ServicesPage'
 import { SlaPoliciesPage } from '@/pages/admin/SlaPoliciesPage'
+import { TechniciansPage } from '@/pages/admin/TechniciansPage'
 import { MyIncidentsPage } from '@/pages/employee/MyIncidentsPage'
 import { ReportIncidentPage } from '@/pages/employee/ReportIncidentPage'
 import { IncidentDetailPage } from '@/pages/shared/IncidentDetailPage'
@@ -41,6 +42,7 @@ export const routes: RouteObject[] = [
               { path: '/admin/sla', element: <SlaPoliciesPage /> },
               { path: '/admin/strategy', element: <AssignmentStrategyPage /> },
               { path: '/admin/services', element: <ServicesPage /> },
+              { path: '/admin/technicians', element: <TechniciansPage /> },
               // Shared
               { path: '/incidents/:id', element: <IncidentDetailPage /> },
               { path: '/notifications', element: <NotificationsPage /> },

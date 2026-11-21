@@ -10,6 +10,7 @@ import {
   Shuffle,
   Timer,
   TriangleAlert,
+  Users,
 } from 'lucide-react'
 import type { Role } from '@/api/types'
 
@@ -35,6 +36,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'SLA policies', to: '/admin/sla', icon: Timer },
     { label: 'Assignment strategy', to: '/admin/strategy', icon: Shuffle },
     { label: 'Services', to: '/admin/services', icon: Server },
+    { label: 'Technicians', to: '/admin/technicians', icon: Users },
   ],
 }
 
