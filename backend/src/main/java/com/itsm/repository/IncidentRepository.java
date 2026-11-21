@@ -16,6 +16,8 @@ public interface IncidentRepository extends JpaRepository<Incident, String>, Jpa
 
     List<Incident> findByStatus(IncidentStatus status);
     List<Incident> findByStatusNotIn(Collection<IncidentStatus> statuses);
+    List<Incident> findByReporterId(String reporterId);
+    List<Incident> findByReporterIdAndStatus(String reporterId, IncidentStatus status);
 
     // Range is half-open: from is included, to is excluded.
     List<Incident> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);

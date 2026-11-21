@@ -7,7 +7,7 @@ class NewState extends IncidentState {
     }
 
     @Override
-    void classify(Incident incident, Priority priority){
-        incident.applyClassify(priority);
+    void classify(Incident incident, Priority priority, User actor){
+        incident.applyClassify(priority, actor);
     }
 }

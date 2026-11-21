@@ -60,8 +60,16 @@ public abstract class User {
         this.email = email.trim().toLowerCase();
     }
 
-    public boolean checkPassword(String hash){
-        return passwordHash.equals(hash);
+    // Only the authentication service reads this; it is never copied into a DTO.
+    public String getPasswordHash(){
+        return passwordHash;
+    }
+
+    public void changePasswordHash(String passwordHash){
+        if(passwordHash == null || passwordHash.isBlank()){
+            throw new IllegalArgumentException("Password hash cannot be empty");
+        }
+        this.passwordHash = passwordHash;
     }
 
     @Override

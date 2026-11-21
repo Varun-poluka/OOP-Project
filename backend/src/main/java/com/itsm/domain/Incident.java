@@ -142,21 +142,23 @@ public class Incident {
         this.resolvedAt = resolvedAt;
     }
 
-    void applyClassify(Priority priority) {
+    // actor is null when the system classifies automatically; the audit trail then shows SYSTEM.
+    void applyClassify(Priority priority, User actor) {
         if (priority == null) {
             throw new NullPointerException("Priority is required");
         }
         this.priority = priority;
-        changeStatus(null, IncidentStatus.CLASSIFIED, "CLASSIFIED", "Priority set to: " + priority);
+        changeStatus(actor, IncidentStatus.CLASSIFIED, "CLASSIFIED", "Priority set to: " + priority);
     }
 
-    void applyAssign(Technician tech) {
+    // actor is null for automatic assignment by the strategy; the audit trail then shows SYSTEM.
+    void applyAssign(Technician tech, User actor) {
         if (tech == null) {
             throw new NullPointerException("Technician is required");
         }
         tech.addIncident();
         this.assignedTechnician = tech;
-        changeStatus(null, IncidentStatus.ASSIGNED, "ASSIGNED", "Assigned to " + tech.getName());
+        changeStatus(actor, IncidentStatus.ASSIGNED, "ASSIGNED", "Assigned to " + tech.getName());
     }
 
     void applyAcknowledge(Technician tech){
@@ -211,11 +213,19 @@ public class Incident {
     }
 
     public void classify(Priority priority){
-        state().classify(this, priority);
+        classify(priority, null);
+    }
+
+    public void classify(Priority priority, User actor){
+        state().classify(this, priority, actor);
     }
 
     public void assignTo(Technician tech){
-        state().assign(this, tech);
+        assignTo(tech, null);
+    }
+
+    public void assignTo(Technician tech, User actor){
+        state().assign(this, tech, actor);
     }
 
     public void acknowledge(Technician tech){

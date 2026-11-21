@@ -2,6 +2,7 @@ package com.itsm.service;
 
 import com.itsm.domain.Notification;
 import com.itsm.domain.exception.ResourceNotFoundException;
+import com.itsm.domain.exception.UnauthorizedActionException;
 import com.itsm.dto.NotificationResponse;
 import com.itsm.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,10 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public List<NotificationResponse> forUser(String userId) {
+    public List<NotificationResponse> forUser(String userId, String actorId) {
+        if (!userId.equals(actorId)) {
+            throw new UnauthorizedActionException("You can only read your own notifications");
+        }
         List<Notification> notifications = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
 
         List<NotificationResponse> result = new ArrayList<>();
@@ -31,9 +35,12 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationResponse markAsRead(Long id) {
+    public NotificationResponse markAsRead(Long id, String actorId) {
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification", String.valueOf(id)));
+        if (!notification.getRecipient().getId().equals(actorId)) {
+            throw new UnauthorizedActionException("You can only mark your own notifications as read");
+        }
         notification.markAsRead();
         return NotificationResponse.from(notification);
     }

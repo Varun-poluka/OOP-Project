@@ -17,4 +17,10 @@ public record IncidentSearchCriteria(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
         Boolean breached,
         String text) {
+
+    // Records are immutable, so restricting the search to one reporter makes a new copy.
+    public IncidentSearchCriteria withReporterId(String newReporterId) {
+        return new IncidentSearchCriteria(status, priority, categoryName, technicianId, newReporterId,
+                from, to, breached, text);
+    }
 }

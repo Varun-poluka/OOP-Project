@@ -3,6 +3,7 @@ package com.itsm.service;
 import com.itsm.domain.*;
 import com.itsm.domain.event.*;
 import com.itsm.domain.exception.ResourceNotFoundException;
+import com.itsm.domain.exception.UnauthorizedActionException;
 import com.itsm.domain.strategy.PriorityCalculator;
 import com.itsm.dto.*;
 import com.itsm.repository.*;
@@ -84,11 +85,36 @@ public class IncidentService {
         return String.format("INC-%04d", incidentRepository.count() + 1);
     }
 
+    // The reporter is the caller for employees; an admin must name the employee they report for.
+    private Employee findReporter(CreateIncidentRequest request, User actor) {
+        if (actor instanceof Employee) {
+            if (request.onBehalfOfEmployeeId() != null && !request.onBehalfOfEmployeeId().equals(actor.getId())) {
+                throw new UnauthorizedActionException("Employees can only report incidents for themselves");
+            }
+            return (Employee) actor;
+        }
+        if (actor instanceof Administrator) {
+            if (request.onBehalfOfEmployeeId() == null || request.onBehalfOfEmployeeId().isBlank()) {
+                throw new IllegalArgumentException("onBehalfOfEmployeeId is required when an administrator reports");
+            }
+            return findEmployee(request.onBehalfOfEmployeeId());
+        }
+        throw new UnauthorizedActionException("Only employees and administrators can report incidents");
+    }
+
+    // Employees may only see incidents they reported; technicians and admins see all.
+    private void requireCanView(Incident incident, User actor) {
+        if (actor instanceof Employee && !incident.getReporter().equals(actor)) {
+            throw new UnauthorizedActionException("You can only view incidents you reported");
+        }
+    }
+
     // ===== 4.3 Use cases =====
+    // actorId is always the id from the caller's verified token, never from the request body.
 
     @Transactional
-    public IncidentResponse report(CreateIncidentRequest request) {
-        Employee reporter = findEmployee(request.reporterId());
+    public IncidentResponse report(CreateIncidentRequest request, String actorId) {
+        Employee reporter = findReporter(request, findUser(actorId));
 
         String categoryName = request.categoryName().toUpperCase();
         Category category = categoryRepository.findById(categoryName)
@@ -116,15 +142,25 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public IncidentResponse get(String id) {
-        return IncidentResponse.from(findIncident(id));
+    public IncidentResponse get(String id, String actorId) {
+        Incident incident = findIncident(id);
+        requireCanView(incident, findUser(actorId));
+        return IncidentResponse.from(incident);
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentResponse> list(IncidentStatus status) {
-        List<Incident> incidents = (status == null)
-                ? incidentRepository.findAll()
-                : incidentRepository.findByStatus(status);
+    public List<IncidentResponse> list(IncidentStatus status, String actorId) {
+        User actor = findUser(actorId);
+        List<Incident> incidents;
+        if (actor instanceof Employee) {
+            incidents = (status == null)
+                    ? incidentRepository.findByReporterId(actorId)
+                    : incidentRepository.findByReporterIdAndStatus(actorId, status);
+        } else {
+            incidents = (status == null)
+                    ? incidentRepository.findAll()
+                    : incidentRepository.findByStatus(status);
+        }
 
         List<IncidentResponse> result = new ArrayList<>();
         for (Incident incident : incidents) {
@@ -134,7 +170,7 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<IncidentResponse> search(IncidentSearchCriteria criteria, Pageable pageable) {
+    public PageResponse<IncidentResponse> search(IncidentSearchCriteria criteria, Pageable pageable, String actorId) {
         if (criteria.from() != null && criteria.to() != null && !criteria.from().isBefore(criteria.to())) {
             throw new IllegalArgumentException("'from' must be before 'to'");
         }
@@ -144,97 +180,116 @@ public class IncidentService {
                         + "'. Allowed: " + SORTABLE_FIELDS);
             }
         }
+        if (findUser(actorId) instanceof Employee) {
+            criteria = criteria.withReporterId(actorId); // whatever reporterId was sent, employees see only their own
+        }
         Page<Incident> page = incidentRepository.findAll(IncidentSpecifications.matching(criteria), pageable);
         return PageResponse.from(page, IncidentResponse::from);
     }
 
     @Transactional
-    public IncidentResponse classify(String incidentId, ClassifyRequest request) {
+    public IncidentResponse classify(String incidentId, ClassifyRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        User admin = findUser(actorId);
         int before = incident.getAuditTrail().size();
-        incident.classify(request.priority());
+        incident.classify(request.priority(), admin);
         incident.startSla(findPolicy(request.priority()));
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse assign(String incidentId, TechnicianActionRequest request) {
+    public IncidentResponse assign(String incidentId, AssignRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(request.technicianId());
+        User admin = findUser(actorId);
         int before = incident.getAuditTrail().size();
-        incident.assignTo(findTechnician(request.technicianId()));
+        incident.assignTo(tech, admin);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse acknowledge(String incidentId, TechnicianActionRequest request) {
+    public IncidentResponse acknowledge(String incidentId, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(actorId);
         int before = incident.getAuditTrail().size();
-        incident.acknowledge(findTechnician(request.technicianId()));
+        incident.acknowledge(tech);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse startWork(String incidentId, TechnicianActionRequest request) {
+    public IncidentResponse startWork(String incidentId, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(actorId);
         int before = incident.getAuditTrail().size();
-        incident.startWork(findTechnician(request.technicianId()));
+        incident.startWork(tech);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse addNote(String incidentId, AddNoteRequest request) {
+    public IncidentResponse addNote(String incidentId, AddNoteRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(actorId);
         int before = incident.getAuditTrail().size();
-        incident.addNote(findTechnician(request.technicianId()), request.text());
+        incident.addNote(tech, request.text());
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse resolve(String incidentId, ResolveRequest request) {
+    public IncidentResponse resolve(String incidentId, ResolveRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(actorId);
         int before = incident.getAuditTrail().size();
-        incident.resolve(findTechnician(request.technicianId()), request.resolutionDetails());
+        incident.resolve(tech, request.resolutionDetails());
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse verify(String incidentId, VerifyRequest request) {
+    public IncidentResponse verify(String incidentId, String actorId) {
         Incident incident = findIncident(incidentId);
+        Employee employee = findEmployee(actorId);
         int before = incident.getAuditTrail().size();
-        incident.verify(findEmployee(request.employeeId()));
+        incident.verify(employee);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse close(String incidentId, CloseRequest request) {
+    public IncidentResponse close(String incidentId, String actorId) {
         Incident incident = findIncident(incidentId);
+        User actor = findUser(actorId);
+        // The domain lets any user close, so the "reporter or admin" rule is checked here.
+        if (actor instanceof Employee && !incident.getReporter().equals(actor)) {
+            throw new UnauthorizedActionException("Only the reporter or an administrator can close this incident");
+        }
         int before = incident.getAuditTrail().size();
-        incident.close(findUser(request.userId()));
+        incident.close(actor);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse reopen(String incidentId, ReopenRequest request) {
+    public IncidentResponse reopen(String incidentId, ReopenRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        Employee employee = findEmployee(actorId);
         int before = incident.getAuditTrail().size();
-        incident.reopen(findEmployee(request.employeeId()), request.reason());
+        incident.reopen(employee, request.reason());
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }
 
     @Transactional
-    public IncidentResponse reassign(String incidentId, ReassignRequest request) {
+    public IncidentResponse reassign(String incidentId, ReassignRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
+        Technician newTech = findTechnician(request.newTechnicianId());
+        User admin = findUser(actorId);
         int before = incident.getAuditTrail().size();
-        incident.reassign(findTechnician(request.newTechnicianId()), findUser(request.actorId()));
+        incident.reassign(newTech, admin);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }

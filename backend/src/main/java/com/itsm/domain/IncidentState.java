@@ -4,11 +4,11 @@ import com.itsm.domain.exception.InvalidStateTransitionException;
 abstract class IncidentState {
     abstract IncidentStatus getStatus();
 
-    void classify(Incident incident, Priority priority){
+    void classify(Incident incident, Priority priority, User actor){
         throw refuse(IncidentStatus.CLASSIFIED);
     }
 
-    void assign(Incident incident, Technician tech){
+    void assign(Incident incident, Technician tech, User actor){
         throw refuse(IncidentStatus.ASSIGNED);
     }
 

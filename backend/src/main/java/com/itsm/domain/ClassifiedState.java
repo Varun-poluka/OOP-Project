@@ -7,7 +7,7 @@ class ClassifiedState extends IncidentState {
     }
 
     @Override
-    void assign(Incident incident, Technician tech){
-        incident.applyAssign(tech);
+    void assign(Incident incident, Technician tech, User actor){
+        incident.applyAssign(tech, actor);
     }
 }

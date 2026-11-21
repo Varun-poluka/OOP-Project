@@ -3,11 +3,15 @@ package com.itsm.config;
 import com.itsm.domain.*;
 import com.itsm.repository.*;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
+
+    // Demo password for every seeded user (listed in README). Only its BCrypt hash is stored.
+    private static final String DEMO_PASSWORD = "password123";
 
     private final UserRepository userRepository;
     private final TechnicianRepository technicianRepository;
@@ -15,19 +19,22 @@ public class DataSeeder implements CommandLineRunner {
     private final ITServiceRepository itServiceRepository;
     private final IncidentRepository incidentRepository;
     private final SLAPolicyRepository slaPolicyRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public DataSeeder(UserRepository userRepository,
                       TechnicianRepository technicianRepository,
                       CategoryRepository categoryRepository,
                       ITServiceRepository itServiceRepository,
                       IncidentRepository incidentRepository,
-                      SLAPolicyRepository slaPolicyRepository){
+                      SLAPolicyRepository slaPolicyRepository,
+                      PasswordEncoder passwordEncoder){
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
         this.categoryRepository = categoryRepository;
         this.itServiceRepository = itServiceRepository;
         this.incidentRepository = incidentRepository;
         this.slaPolicyRepository = slaPolicyRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -40,9 +47,11 @@ public class DataSeeder implements CommandLineRunner {
             slaPolicyRepository.save(new SLAPolicy(Priority.P4, 240, 1440));
         }
         if(userRepository.count() > 0){
+            backfillPasswordHashes();
             System.out.println("DataSeeder: users already exist, skipping seed");
             return;
         }
+        String demoHash = passwordEncoder.encode(DEMO_PASSWORD);
 
         // Categories: save() returns the managed copy, so always keep the returned object
         Category network = categoryRepository.save(new Category("NETWORK", "Network and connectivity issues"));
@@ -61,15 +70,15 @@ public class DataSeeder implements CommandLineRunner {
 
         // Users
         Employee employee = (Employee) userRepository.save(
-                new Employee("U-EMP-1", "Asha Employee", "employee@itsm.local", "hash-employee"));
+                new Employee("U-EMP-1", "Asha Employee", "employee@itsm.local", demoHash));
         userRepository.save(
-                new Administrator("U-ADM-1", "Ravi Admin", "admin@itsm.local", "hash-admin"));
+                new Administrator("U-ADM-1", "Ravi Admin", "admin@itsm.local", demoHash));
 
-        Technician databaseTech = new Technician("U-TEC-1", "Dev Database", "db.tech@itsm.local", "hash-tech1", 3);
+        Technician databaseTech = new Technician("U-TEC-1", "Dev Database", "db.tech@itsm.local", demoHash, 3);
         databaseTech.addSkill(database);
         databaseTech = technicianRepository.save(databaseTech);
 
-        Technician networkTech = new Technician("U-TEC-2", "Neha Network", "net.tech@itsm.local", "hash-tech2", 3);
+        Technician networkTech = new Technician("U-TEC-2", "Neha Network", "net.tech@itsm.local", demoHash, 3);
         networkTech.addSkill(network);
         networkTech.addSkill(hardware);
         technicianRepository.save(networkTech);
@@ -86,5 +95,22 @@ public class DataSeeder implements CommandLineRunner {
         technicianRepository.save(databaseTech);   // stores activeIncidents = 1
 
         System.out.println("DataSeeder: sample data loaded");
+    }
+
+    // Users saved before login existed have placeholder hashes such as "hash-employee".
+    // A real BCrypt hash always starts with "$2", so anything else gets the demo password.
+    // Runs inside run()'s transaction: changing a loaded entity is saved automatically.
+    private void backfillPasswordHashes() {
+        int updated = 0;
+        for (User user : userRepository.findAll()) {
+            String hash = user.getPasswordHash();
+            if (hash == null || !hash.startsWith("$2")) {
+                user.changePasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
+                updated++;
+            }
+        }
+        if (updated > 0) {
+            System.out.println("DataSeeder: set demo passwords for " + updated + " existing users");
+        }
     }
 }

@@ -80,3 +80,104 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     a filter with no matches gives 200 with empty content.
   - Report: the sum of byStatus equals `totalIncidents` (5 = 5), from > to gives 400, and
     an empty range gives `null` compliance with every technician listed at 0.
+
+### 2026-11-21: Slice 2 · Authentication and authorization
+
+- **What was built:**
+  - Login with email and password (`POST /api/auth/login`) returns a JWT that lasts 8 hours.
+  - `GET /api/auth/me` returns the logged-in user.
+  - Every other endpoint needs the token and checks the caller's role and ownership.
+  - Request bodies no longer carry "who am I" ids. The server takes the caller from the token.
+- **Why:** before this, anyone could call anything and claim to be anyone, for example by
+  sending `"technicianId":"U-TEC-1"` in the body. Now identity comes from a signed token the
+  client cannot forge.
+- **Files:**
+  - `config/JwtConfig.java`: builds the signing key from `JWT_SECRET` (startup fails if it is
+    missing or under 32 bytes), plus the JWT encoder and decoder.
+  - `config/SecurityConfig.java`: stateless sessions, the role rules (request matchers), the
+    401/403 handlers, BCrypt and CORS.
+  - `config/OpenApiConfig.java`: the Swagger "Authorize" button.
+  - `service/AuthService.java` and `controller/AuthController.java`: login and `me`.
+  - `dto/LoginRequest`, `LoginResponse`, `UserResponse`, `AssignRequest`: new.
+  - Request DTOs without actor ids: `CreateIncidentRequest` (plus an admin-only
+    `onBehalfOfEmployeeId`), `AddNoteRequest`, `ResolveRequest`, `ReopenRequest` and
+    `ReassignRequest`. `VerifyRequest`, `CloseRequest` and `TechnicianActionRequest` were
+    removed.
+  - `IncidentService` and `NotificationService` take `actorId` from the token and check
+    ownership:
+    - An employee only sees their own incidents.
+    - Only the reporter or an admin can close.
+    - Users can only read their own notifications.
+  - `IncidentController` and `NotificationController`: `@AuthenticationPrincipal Jwt`.
+  - `GlobalExceptionHandler`: 401 and 403 as ProblemDetail.
+  - `DataSeeder`: BCrypt demo passwords, plus a backfill for old placeholder hashes.
+  - Domain:
+    - `User`: `changePasswordHash` and `getPasswordHash` added; the misleading
+      `checkPassword` removed.
+    - `Incident`, `IncidentState`, `NewState`, `ClassifiedState`: `classify` and `assignTo`
+      accept the acting user, so a manual classify or assign is audited as the admin. The
+      automatic path still records SYSTEM.
+  - Tests: `src/test/resources/application-test.properties` (the `itsm_test` database, a fake
+    key) and `controller/AuthAndAccessIntegrationTest.java`.
+- **Key concepts:**
+  - **Authentication vs authorization:** authentication answers "who are you?" (login checks
+    the password, and the token proves it later). Authorization answers "are you allowed to
+    do this?" (role rules plus ownership checks).
+  - **401 vs 403:**
+    - 401 Unauthorized means "I don't know who you are": no token, a broken or expired
+      token, or a wrong password.
+    - 403 Forbidden means "I know who you are, but you may not do this": the wrong role, or
+      not your incident.
+  - **JWT (JSON Web Token):** three Base64 parts, `header.payload.signature`.
+    - The payload holds claims: `sub` (user id), `name`, `role`, `exp` (expiry).
+    - The server signs the token with HS256 (HMAC-SHA256) using the secret key.
+    - On every request it recomputes the signature. If anyone changed a claim (say, role to
+      ADMIN), the signature no longer matches and the request gets a 401.
+    - The payload is only encoded, not encrypted: anyone can read it, but nobody can change it
+      without the key. So never put secrets in it.
+  - **BCrypt:** a slow, salted, one-way password hash.
+    - "One-way": we can't turn the hash back into the password. Login hashes the typed
+      password and compares the results (`passwordEncoder.matches`).
+    - "Salted": two users with the same password get different hashes.
+    - "Slow": guessing millions of passwords takes far longer.
+    - That's why `equals()` on hashes (the old `checkPassword`) is wrong: each hash includes a
+      random salt.
+    - Login gives the same message for an unknown email and a wrong password. It also runs a
+      dummy BCrypt check for unknown emails, so attackers can't tell which emails exist.
+  - **Stateless sessions:** the server keeps no login memory (no session, no cookie). Every
+    request brings its token, and the server verifies it from scratch. This scales easily and
+    suits a React client. The trade-off is that a token stays valid until it expires (8 h).
+    CSRF protection is turned off because it guards cookie sessions, which we don't use.
+  - **Request matchers vs `@PreAuthorize`:** the URL → role rules are request matchers in one
+    table in `SecurityConfig`, so the whole access policy is readable in one place. Rules that
+    need data (is this the reporter? the assigned technician?) can't be decided from the URL,
+    so they live in the services and the domain, and throw `UnauthorizedActionException` →
+    403.
+  - **`@AuthenticationPrincipal Jwt jwt`:** Spring hands the controller the already-verified
+    token. `jwt.getSubject()` is the caller's id.
+  - **CORS (Cross-Origin Resource Sharing):** browsers block a page on one origin
+    (`localhost:5173`, the Vite dev server) from calling another (`localhost:8080`) unless the
+    server allows it. Before the real call the browser sends an `OPTIONS` "preflight" request,
+    and we answer "yes" only for `http://localhost:5173` with the `Authorization` and
+    `Content-Type` headers. CORS is a browser rule. It is not security against curl or other
+    servers.
+  - **Fail fast:** if `JWT_SECRET` is missing or too short, the app refuses to start with a
+    clear message, instead of starting with a weak or empty key.
+  - **Delegating security errors to `@RestControllerAdvice`:** security filters run before the
+    controllers, so `GlobalExceptionHandler` would not normally see their errors. The entry
+    point and access-denied handler pass them to `HandlerExceptionResolver`, so 401/403 use the
+    same ProblemDetail JSON as every other error.
+- **How it was tested:**
+  - `./mvnw test`: 22 tests pass.
+    - 9 MockMvc integration tests against `itsm_test`: login ok/fail (same 401 text), no token
+      → 401, bad token → 401, employee on reports → 403, employee can't see another employee's
+      incident (403, and search is forced to their own), an unassigned technician can't
+      resolve (403), manual assign is audited as "Ravi Admin", and the full report →
+      acknowledge → start → resolve → verify → close path with the right logins.
+    - 12 calculator tests and `contextLoads`.
+  - Startup fails fast with an empty and with a 9-byte `JWT_SECRET`.
+  - curl against the running app:
+    - Login for all four users; `me`; 401 with no token and with a garbage token.
+    - Per role, one allowed and one forbidden call.
+    - Notification ownership, the CORS preflight (5173 allowed, another origin 403), and the
+      Swagger security scheme.
