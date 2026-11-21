@@ -20,8 +20,9 @@ abstract class IncidentState {
         throw refuse(IncidentStatus.IN_PROGRESS);
     }
 
+    // A note does not change the status, so the refused "target" is the current status.
     void addNote(Incident incident, Technician tech, String text) {
-        throw new IllegalStateException("Notes can only be added while the incident is being worked on");
+        throw refuse(getStatus());
     }
 
     void resolve(Incident incident, Technician tech, String details) {

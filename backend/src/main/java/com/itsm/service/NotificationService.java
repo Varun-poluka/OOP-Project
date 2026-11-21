@@ -6,6 +6,7 @@ import com.itsm.domain.exception.UnauthorizedActionException;
 import com.itsm.dto.NotificationResponse;
 import com.itsm.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -32,6 +33,13 @@ public class NotificationService {
             result.add(NotificationResponse.from(notification));
         }
         return result;
+    }
+
+    // REQUIRES_NEW: LiveUpdateListener calls this from afterCommit, when the caller's transaction has
+    // already committed and must not be joined. Called from the controller it is simply a new transaction.
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public long unreadCount(String userId) {
+        return notificationRepository.countByRecipientIdAndReadFalse(userId);
     }
 
     @Transactional

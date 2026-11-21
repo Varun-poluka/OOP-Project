@@ -320,3 +320,124 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - Notifications reached the technician and the admin, and not the employee.
     - Dependency add, duplicate add (400), remove and self-dependency (400) work, and
       employees get 403.
+
+---
+
+### 2026-11-21: Slice 4 · Live updates (SSE) and the backend test suite
+
+- **What was built:**
+  - `GET /api/stream` pushes live `incident` and `notification` events to the browser.
+  - Three small read endpoints: unread count, categories and technicians.
+  - The test suite grew from 65 to 230 tests, and JaCoCo now measures coverage (84.9% of lines).
+  - One approved domain fix: adding a note in the wrong state now throws
+    `InvalidStateTransitionException`, like every other refused action.
+- **Why:** the React frontend should update by itself when an incident changes, instead of the user
+  reloading. The forms need the category and technician lists. The tests show that the State,
+  Strategy and Observer code really behaves as the design says.
+- **Files:**
+  - `service/live/LiveUpdateRegistry.java`: keeps the open connections, one emitter per browser tab,
+    and sends to them; heartbeat every 25 s.
+  - `service/notification/LiveUpdateListener.java`: the third Observer. It decides who should hear
+    about an event and sends after the commit.
+  - `controller/LiveUpdateController.java`: `GET /api/stream` returns an `SseEmitter`.
+  - `config/SecurityConfig.java`: lets ASYNC dispatches through (explained below); `/api/technicians`
+    is admin only.
+  - `repository/NotificationRepository.java`, `service/NotificationService.java`,
+    `controller/NotificationController.java`: the unread count.
+  - `service/ReferenceDataService.java`, `controller/ReferenceDataController.java`,
+    `dto/CategoryResponse`, `dto/TechnicianResponse`: the two lists.
+  - `dto/IncidentUpdateEvent`, `dto/UnreadCountResponse`: the event payloads.
+  - `domain/IncidentState.java`: the default `addNote` now calls `refuse(getStatus())`.
+  - `pom.xml`: the JaCoCo plugin.
+  - Tests:
+    - unit: `IncidentStateTransitionTest`, `WeightedPriorityCalculatorTest`, `AssignmentStrategyTest`,
+      `IncidentSlaTest`, `NotificationRulesTest`, `LiveUpdateRegistryTest`;
+    - integration: `SearchIntegrationTest`, `ReportSummaryIntegrationTest`, `LiveUpdateIntegrationTest`,
+      `IncidentConflictIntegrationTest`;
+    - helper: `ApiTestClient`.
+- **Key concepts:**
+  - **Polling vs SSE vs WebSocket:**
+    - Polling means the browser asks "anything new?" every few seconds. It is simple, but wasteful
+      and always a little late.
+    - Server-Sent Events (SSE) is one long HTTP response that the server keeps writing small text
+      events into (`event:incident` / `data:{...}`). It goes one way only, server to browser. It is
+      plain HTTP, so our JWT security and CORS work unchanged.
+    - A WebSocket is a two-way connection with its own protocol. We don't need two-way messages:
+      the browser already sends its actions as normal REST calls. So SSE is the simplest tool that
+      fits.
+    - The frontend uses a fetch-based SSE client so it can send the `Authorization` header. A token
+      in the URL would end up in server logs.
+  - **`SseEmitter`:**
+    - A Spring MVC object returned from a controller. Spring keeps the response open, and every
+      `emitter.send(...)` writes one event.
+    - After 30 minutes it times out and the client reconnects. That clears out connections that
+      silently died.
+    - The `:heartbeat` comment line is ignored by clients. It keeps proxies from closing an idle
+      connection, and a failed heartbeat tells us a tab is gone.
+  - **Sending only after commit:**
+    - Listeners run inside the service's `@Transactional` method, before the data is committed.
+    - If we pushed right away, the browser could refetch the incident while the change is still
+      uncommitted and get the old data. If the transaction then rolled back, we would have
+      announced a change that never happened.
+    - So the listener builds the payload now but registers a `TransactionSynchronization`. Its
+      `afterCommit()` runs only once the commit succeeded, and that is where the events are sent.
+    - The unread count is read in `afterCommit` with `propagation = REQUIRES_NEW`, because the old
+      transaction is finished and must not be joined.
+  - **The ASYNC dispatch fix:**
+    - When a streaming response ends (timeout or the client leaves), the servlet container sends the
+      request through the filters once more, as an "ASYNC dispatch".
+    - Our API is STATELESS: the login comes only from the JWT on the original request and is not
+      stored anywhere. So on that second pass Spring Security sees an anonymous user, and access is
+      denied.
+    - `.dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()` lets that internal re-dispatch
+      through. It is safe because the original request was already authenticated and authorised.
+  - **Thread-safe collections:**
+    - Request threads, the heartbeat scheduler thread and the threads that commit transactions all
+      use the registry at the same time.
+    - `ConcurrentHashMap` allows safe parallel reads and writes. `computeIfAbsent` and
+      `computeIfPresent` make "create the list if missing" and "remove the key when the list is
+      empty" atomic, so two threads cannot interleave halfway.
+    - `CopyOnWriteArrayList` copies the list on every add or remove. Sending can therefore loop over
+      it while another thread removes a dead tab, with no `ConcurrentModificationException`. This
+      suits us because sends are frequent and connects and disconnects are rare.
+  - **Domain fix (approved):**
+    - The default `IncidentState.addNote` used to throw `IllegalStateException`. Every other refused
+      action throws `InvalidStateTransitionException`.
+    - `GlobalExceptionHandler` happens to map both to 409. But one exception type for "not allowed
+      in this state" is clearer, and the state test can expect it for every illegal case.
+    - A note does not change the status, so the refused target is the current status. The message
+      is therefore "Cannot move incident from CLOSED to CLOSED".
+  - **Parameterized tests:**
+    - `@ParameterizedTest` runs one test method many times with different inputs, supplied by
+      `@CsvSource`, `@ValueSource` or a `@MethodSource` method.
+    - The State pattern test is a table of 8 statuses × 10 actions = 80 cases, built from one list of
+      the 13 legal moves. Every other pair must throw and leave the status and audit trail unchanged.
+      A new state or action shows up as a failing case immediately.
+  - **Test pyramid:**
+    - Many fast unit tests at the bottom: plain Java, no Spring, milliseconds each. These cover the
+      domain rules, the strategies, the calculators and the registry.
+    - Fewer, slower integration tests on top: `@SpringBootTest` + MockMvc against the real
+      `itsm_test` database. These check what only the whole stack can show: JPA queries, LIKE
+      escaping, security rules and the SSE wiring.
+    - The integration tests share one database and two technicians with a workload of 3. So they
+      search with a unique marker word, use APPLICATION incidents (never auto-assigned), and resolve
+      any assigned incident they create.
+  - **Coverage (JaCoCo):**
+    - A Java agent records which lines ran during the tests. `./mvnw verify` writes the report to
+      `target/site/jacoco/index.html`.
+    - The total is 84.9% of lines. Domain strategies are at 97%, live updates at 97% and
+      notifications at 94%.
+    - Coverage shows what was *run*, not what was *checked*. A line can run in a test that asserts
+      nothing, so it is a guide to gaps and not a grade.
+- **How it was tested:**
+  - `./mvnw verify`: 230 tests pass and BUILD SUCCESS, with the JaCoCo report generated.
+  - curl against the app on port 8081:
+    - `curl -N` on `/api/stream` as admin and as employee received `event:connected`.
+    - After the employee reported INC-0010, both streams received `event:incident` for CREATED and
+      CLASSIFIED (`status CLASSIFIED, priority P3, riskLevel LOW`). The employee's stream also
+      received `event:notification {"unreadCount":23}`.
+    - Each stream received a `:heartbeat`. There was no access-denied error in the log when the
+      streams closed.
+    - `/api/notifications/unread-count` returned 200, `/api/categories` returned 200 sorted by name,
+      `/api/technicians` returned 200 for the admin and 403 for the employee, and `/api/stream`
+      without a token returned 401.

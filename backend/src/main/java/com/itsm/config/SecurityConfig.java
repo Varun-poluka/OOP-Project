@@ -1,5 +1,6 @@
 package com.itsm.config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +39,10 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
+                        // The SSE stream: when it ends, the container re-dispatches the request (ASYNC).
+                        // The app is stateless, so that dispatch carries no login and would be denied.
+                        // The original request was already checked, so the async dispatch is allowed.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         // Public
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
@@ -49,7 +54,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/classify", "/api/incidents/*/assign",
                                 "/api/incidents/*/reassign").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**", "/api/reports/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/incidents/*/recommendations").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/*/recommendations", "/api/technicians")
+                                .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/services", "/api/services/*/dependencies/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/services/*/dependencies/*").hasRole("ADMIN")
                         // Technicians and admins (a technician only sees their own at-risk incidents)
@@ -64,7 +70,7 @@ public class SecurityConfig {
                                 .hasRole("EMPLOYEE")
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/close").hasAnyRole("EMPLOYEE", "ADMIN")
                         // Everything else (reading incidents and their impact, the service list,
-                        // notifications, /api/auth/me): any logged-in user
+                        // notifications, categories, the live stream, /api/auth/me): any logged-in user
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

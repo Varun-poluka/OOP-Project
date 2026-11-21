@@ -45,3 +45,18 @@ The backend needs the `DB_PASSWORD` and `JWT_SECRET` (at least 32 bytes) environ
 
 The create-incident response includes `possibleDuplicates`, and every incident response includes `riskLevel` and `slaPercentUsed`.
 
+
+## Live updates and lookups (slice 4)
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/stream` | Any logged-in user | Server-Sent Events stream (30 min, then the client reconnects). Events: `connected`, `incident` `{incidentId, action, status, priority, riskLevel}`, `notification` `{unreadCount}`; a `:heartbeat` comment every 25 s |
+| `GET /api/notifications/unread-count` | Any logged-in user | `{"unreadCount": n}` for the caller |
+| `GET /api/categories` | Any logged-in user | Categories with descriptions, sorted by name |
+| `GET /api/technicians` | Admin | Technicians with skills, availability, active incidents and max workload |
+
+Events are sent only after the database transaction commits. Try the stream with
+`curl -N -H "Authorization: Bearer <token>" http://localhost:8080/api/stream`.
+
+## Tests and coverage
+`cd backend && ./mvnw verify` runs all tests (230 at slice 4; they need PostgreSQL with an `itsm_test`
+database) and writes the JaCoCo coverage report to `backend/target/site/jacoco/index.html`.
