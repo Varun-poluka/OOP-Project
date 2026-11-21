@@ -22,6 +22,7 @@ const ACCESS_RULES: { pattern: RegExp; roles: Role[] }[] = [
   { pattern: /^\/incidents\/mine\/?$/, roles: ['EMPLOYEE'] },
   { pattern: /^\/incidents\/[^/]+\/?$/, roles: ALL_ROLES },
   { pattern: /^\/queue\/?$/, roles: ['TECHNICIAN'] },
+  { pattern: /^\/at-risk\/?$/, roles: ['TECHNICIAN'] },
   { pattern: /^\/admin(\/.*)?$/, roles: ['ADMIN'] },
   { pattern: /^\/notifications\/?$/, roles: ALL_ROLES },
 ]

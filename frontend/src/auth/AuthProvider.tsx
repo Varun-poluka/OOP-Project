@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { login as loginRequest } from '@/api/auth'
@@ -18,11 +18,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Lazy initial state: read sessionStorage once, on first render (so a reload stays logged in).
   const [session, setSession] = useState<Session | null>(() => readSession())
   const [lastLogoutReason, setLastLogoutReason] = useState<LogoutReason | null>(null)
+  const [lastUserId, setLastUserId] = useState<string | null>(null)
+  // endSession needs the *current* session's user. A ref always holds the latest value without
+  // making endSession change on every login (which would re-register the 401 handler each time).
+  const sessionRef = useRef(session)
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const endSession = useCallback(
     (reason: LogoutReason) => {
+      if (sessionRef.current !== null) setLastUserId(sessionRef.current.user.id)
       clearSession()
       setSession(null)
       setLastLogoutReason(reason)
@@ -63,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // useMemo keeps the same object between renders, so consumers only re-render when it changes.
   const value = useMemo<AuthContextValue>(
-    () => ({ user: session === null ? null : session.user, login, logout, lastLogoutReason }),
-    [session, login, logout, lastLogoutReason],
+    () => ({ user: session === null ? null : session.user, login, logout, lastLogoutReason, lastUserId }),
+    [session, login, logout, lastLogoutReason, lastUserId],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

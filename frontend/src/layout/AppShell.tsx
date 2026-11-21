@@ -3,6 +3,7 @@ import { ChevronDown, LogOut } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
+import { LiveUpdatesProvider } from '@/live/LiveUpdatesProvider'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAuth } from '@/auth/useAuth'
 import { cn } from '@/lib/utils'
+import { LiveIndicator } from './LiveIndicator'
 import { NAV_BY_ROLE, ROLE_LABEL, SHARED_NAV, type NavItem } from './nav'
 
 /**
@@ -31,63 +33,66 @@ export function AppShell() {
   const items = NAV_BY_ROLE[user.role]
 
   return (
-    <div className="flex min-h-svh">
-      <aside className="sticky top-0 flex h-svh w-16 shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:w-60">
-        <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
-          <BrandMark />
-          <div className="hidden leading-tight lg:block">
-            <p className="font-semibold text-sidebar-accent-foreground">I-ITSM</p>
-            <p className="font-mono text-[10px] tracking-[0.14em] text-sidebar-muted uppercase">Service desk</p>
+    <LiveUpdatesProvider>
+      <div className="flex min-h-svh">
+        <aside className="sticky top-0 flex h-svh w-16 shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:w-60">
+          <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
+            <BrandMark />
+            <div className="hidden leading-tight lg:block">
+              <p className="font-semibold text-sidebar-accent-foreground">I-ITSM</p>
+              <p className="font-mono text-[10px] tracking-[0.14em] text-sidebar-muted uppercase">Service desk</p>
+            </div>
           </div>
+
+          <nav aria-label="Main" className="flex-1 space-y-6 overflow-y-auto px-2 py-4">
+            <NavSection title={ROLE_LABEL[user.role]} items={items} />
+            <NavSection title="General" items={SHARED_NAV} />
+          </nav>
+
+          <div className="hidden border-t border-sidebar-border p-4 lg:block">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-sidebar-muted uppercase">Signed in as</p>
+            <p className="mt-1 truncate text-sidebar-accent-foreground">{user.name}</p>
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-end gap-1 border-b bg-background/85 px-4 backdrop-blur md:px-8">
+            <LiveIndicator />
+            <NotificationBell />
+            <ThemeToggle />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-9 gap-2 px-2">
+                  <span className="grid size-7 place-items-center rounded-full bg-accent font-mono text-xs font-medium text-accent-foreground">
+                    {initials(user.name)}
+                  </span>
+                  <span className="hidden text-left leading-tight sm:block">
+                    <span className="block text-sm">{user.name}</span>
+                    <span className="block text-[11px] text-muted-foreground">{ROLE_LABEL[user.role]}</span>
+                  </span>
+                  <ChevronDown className="text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="font-medium">{user.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={logout}>
+                  <LogOut />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </header>
+
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">
+            <Outlet />
+          </main>
         </div>
-
-        <nav aria-label="Main" className="flex-1 space-y-6 overflow-y-auto px-2 py-4">
-          <NavSection title={ROLE_LABEL[user.role]} items={items} />
-          <NavSection title="General" items={SHARED_NAV} />
-        </nav>
-
-        <div className="hidden border-t border-sidebar-border p-4 lg:block">
-          <p className="font-mono text-[10px] tracking-[0.14em] text-sidebar-muted uppercase">Signed in as</p>
-          <p className="mt-1 truncate text-sidebar-accent-foreground">{user.name}</p>
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-end gap-1 border-b bg-background/85 px-4 backdrop-blur md:px-8">
-          <NotificationBell />
-          <ThemeToggle />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-9 gap-2 px-2">
-                <span className="grid size-7 place-items-center rounded-full bg-accent font-mono text-xs font-medium text-accent-foreground">
-                  {initials(user.name)}
-                </span>
-                <span className="hidden text-left leading-tight sm:block">
-                  <span className="block text-sm">{user.name}</span>
-                  <span className="block text-[11px] text-muted-foreground">{ROLE_LABEL[user.role]}</span>
-                </span>
-                <ChevronDown className="text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="font-normal">
-                <p className="font-medium">{user.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={logout}>
-                <LogOut />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8">
-          <Outlet />
-        </main>
       </div>
-    </div>
+    </LiveUpdatesProvider>
   )
 }
 

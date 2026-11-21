@@ -211,11 +211,25 @@ export type CategoryResponse = { name: string; description: string }
 
 export type NotificationResponse = {
   id: number
-  /** Can be null (the live backend currently sends null for every notification). */
+  /** The incident it is about. Null for notifications created before the backend filled it in. */
   incidentId: string | null
   message: string
   read: boolean
   createdAt: LocalDateTimeString
+}
+
+/** GET /api/notifications/unread-count, and the data of the SSE "notification" event. */
+export type UnreadCountResponse = { unreadCount: number }
+
+// ---- Live updates (GET /api/stream) ----
+
+/** Data of the SSE "incident" event: just enough to decide what to refetch. */
+export type IncidentUpdateEvent = {
+  incidentId: string
+  action: string
+  status: IncidentStatus
+  priority: Priority | null
+  riskLevel: RiskLevel | null
 }
 
 // ---- Admin ----

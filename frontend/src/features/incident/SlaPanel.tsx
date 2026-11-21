@@ -1,7 +1,6 @@
 import type { IncidentResponse } from '@/api/types'
 import { SlaClockBadge } from '@/components/SlaClockBadge'
-import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
+import { SlaUsageBar } from '@/components/SlaUsageBar'
 import { formatDateTime } from '@/lib/time'
 import { Panel } from './Panel'
 import { resolutionClock, responseClock, type ClockInput } from './slaClocks'
@@ -16,20 +15,7 @@ export function SlaPanel({ incident }: { incident: IncidentResponse }) {
         <ClockRow title="Resolution" clock={resolutionClock(incident)} stoppedLabel="Resolved" />
       </dl>
       {used !== null && (
-        <div className="mt-4 border-t pt-4">
-          <div className="mb-1.5 flex justify-between text-xs">
-            <span className="text-muted-foreground">Time used on the current clock</span>
-            <span className="font-mono tabular">{used}%</span>
-          </div>
-          <Progress
-            value={Math.min(used, 100)}
-            aria-label="Share of the SLA window used"
-            className={cn(
-              used >= 100 && '[&>[data-slot=progress-indicator]]:bg-sla-breached',
-              used >= 75 && used < 100 && '[&>[data-slot=progress-indicator]]:bg-sla-warning',
-            )}
-          />
-        </div>
+        <SlaUsageBar percent={used} caption="Time used on the current clock" className="mt-4 border-t pt-4" />
       )}
     </Panel>
   )

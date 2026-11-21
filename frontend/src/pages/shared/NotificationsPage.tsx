@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router'
-import { Bell, Check } from 'lucide-react'
+import { Bell, Check, ChevronRight } from 'lucide-react'
 import type { NotificationResponse } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
@@ -17,6 +17,7 @@ export function NotificationsPage() {
   const now = useNow(60_000)
 
   // Opening marks it read, and goes to the incident when the notification names one.
+  // Older notifications (created before the backend filled incidentId) have null: they only get marked read.
   function open(notification: NotificationResponse) {
     if (!notification.read) markAsRead.mutate(notification.id)
     if (notification.incidentId !== null) navigate(`/incidents/${encodeURIComponent(notification.incidentId)}`)
@@ -59,7 +60,11 @@ export function NotificationsPage() {
                   <span className="sr-only">{item.read ? 'Read: ' : 'Unread: '}</span>
                   <span className={cn('block', item.read ? 'text-muted-foreground' : 'font-medium')}>{item.message}</span>
                   {item.incidentId !== null && (
-                    <span className="block font-mono text-xs text-muted-foreground">{item.incidentId}</span>
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 font-mono text-xs text-muted-foreground">
+                      {item.incidentId}
+                      <span className="font-sans">· Open incident</span>
+                      <ChevronRight aria-hidden className="size-3.5" />
+                    </span>
                   )}
                 </button>
                 <time

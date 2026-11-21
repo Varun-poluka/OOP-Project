@@ -1,14 +1,8 @@
 import { AlarmClockOff, Clock, TimerOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { parseBackendDateTime, slaCountdown, type SlaState } from '@/lib/sla'
+import { parseBackendDateTime, slaCountdown } from '@/lib/sla'
+import { SLA_TONE_CLASS } from '@/lib/slaTone'
 import { useNow } from '@/lib/useNow'
-
-const TONE_CLASS: Record<SlaState, string> = {
-  none: 'text-muted-foreground',
-  ok: 'text-sla-ok',
-  warning: 'border-sla-warning/40 bg-sla-warning/10 text-sla-warning',
-  breached: 'border-sla-breached/40 bg-sla-breached/10 text-sla-breached',
-}
 
 type SlaCountdownProps = {
   /** responseDueAt or resolutionDueAt from IncidentResponse. */
@@ -32,7 +26,7 @@ export function SlaCountdown({ dueAt, breached = false, label, className }: SlaC
       title={dueText}
       className={cn(
         'inline-flex h-6 items-center gap-1.5 rounded-sm border border-transparent px-1.5 text-xs whitespace-nowrap',
-        TONE_CLASS[countdown.state],
+        SLA_TONE_CLASS[countdown.state],
         className,
       )}
     >

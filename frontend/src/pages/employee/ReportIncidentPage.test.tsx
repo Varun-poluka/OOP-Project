@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
+import { getCategories } from '@/api/categories'
 import { ApiError } from '@/api/errors'
 import { incidentsApi } from '@/api/incidents'
 import { servicesApi } from '@/api/services'
@@ -13,9 +14,11 @@ import { ReportIncidentPage } from './ReportIncidentPage'
 // Replace the network functions with fakes we control.
 vi.mock('@/api/incidents', () => ({ incidentsApi: { report: vi.fn(), checkDuplicates: vi.fn() } }))
 vi.mock('@/api/services', () => ({ servicesApi: { list: vi.fn() } }))
+vi.mock('@/api/categories', () => ({ getCategories: vi.fn() }))
 const reportMock = vi.mocked(incidentsApi.report)
 const checkMock = vi.mocked(incidentsApi.checkDuplicates)
 const servicesMock = vi.mocked(servicesApi.list)
+const categoriesMock = vi.mocked(getCategories)
 
 function renderPage() {
   saveSession({
@@ -48,6 +51,10 @@ beforeEach(() => {
   checkMock.mockReset().mockResolvedValue([])
   servicesMock.mockReset().mockResolvedValue([
     { id: 3, name: 'Email', businessCriticality: 2, dependsOn: [], openIncidentCount: 0 },
+  ])
+  categoriesMock.mockReset().mockResolvedValue([
+    { name: 'NETWORK', description: 'Network and connectivity issues' },
+    { name: 'HARDWARE', description: 'Hardware issues' },
   ])
 })
 

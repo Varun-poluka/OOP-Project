@@ -7,13 +7,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessage } from '@/api/errors'
-import { INCIDENT_STATUSES } from '@/api/types'
+import { INCIDENT_STATUSES, type IncidentStatus } from '@/api/types'
 import { postLoginPath } from '@/auth/roleHome'
 import { useAuth } from '@/auth/useAuth'
 import { STATUS_LABEL } from '@/lib/labels'
 
-/** RequireAuth passes the page the user wanted, so we can return there after login. */
-type LoginLocationState = { from?: string } | null
+/**
+ * RequireAuth passes the page the user wanted, so we can return there after login.
+ * fromUserId: whose session ended on that page (null if nobody was signed in, e.g. a bookmark).
+ */
+type LoginLocationState = { from?: string; fromUserId?: string | null } | null
+
+/** The page to return to, but only for the same person: someone else signing in starts at their home. */
+function returnPathFor(state: LoginLocationState, signedInUserId: string): string | undefined {
+  if (state === null || state.from === undefined) return undefined
+  const previousUser = state.fromUserId ?? null
+  if (previousUser !== null && previousUser !== signedInUserId) return undefined
+  return state.from
+}
 
 export function LoginPage() {
   const { user, login, lastLogoutReason } = useAuth()
@@ -28,7 +39,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   // Already logged in (e.g. pressed Back to /login): go straight to the right page.
-  if (user !== null) return <Navigate to={postLoginPath(user.role, state?.from)} replace />
+  if (user !== null) return <Navigate to={postLoginPath(user.role, returnPathFor(state, user.id))} replace />
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault() // stop the browser's own full-page form submit
@@ -40,7 +51,7 @@ export function LoginPage() {
     setError(null)
     try {
       const loggedIn = await login(email.trim(), password)
-      navigate(postLoginPath(loggedIn.role, state?.from), { replace: true })
+      navigate(postLoginPath(loggedIn.role, returnPathFor(state, loggedIn.id)), { replace: true })
     } catch (caught) {
       setError(errorMessage(caught))
       setSubmitting(false)
@@ -116,6 +127,18 @@ export function LoginPage() {
   )
 }
 
+/** Who moves the incident into each status. "System (auto)": the backend can do this step itself. */
+const STEP_ACTOR: Record<IncidentStatus, string> = {
+  NEW: 'Employee (reports)',
+  CLASSIFIED: 'System (auto) / Admin',
+  ASSIGNED: 'System (auto) / Admin',
+  ACKNOWLEDGED: 'Technician',
+  IN_PROGRESS: 'Technician',
+  RESOLVED: 'Technician',
+  VERIFIED: 'Employee',
+  CLOSED: 'Employee / Admin',
+}
+
 /** Left panel (desktop only): the incident lifecycle, set like a departures board. */
 function LifecyclePanel() {
   return (
@@ -149,7 +172,7 @@ function LifecyclePanel() {
             >
               <span className="w-6 text-sidebar-muted tabular">{String(index + 1).padStart(2, '0')}</span>
               <span className="text-sidebar-accent-foreground">{STATUS_LABEL[status]}</span>
-              <span className="ml-auto text-[11px] text-sidebar-muted">{status}</span>
+              <span className="ml-auto text-[11px] text-sidebar-muted">{STEP_ACTOR[status]}</span>
             </li>
           ))}
         </ol>

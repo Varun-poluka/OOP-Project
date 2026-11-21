@@ -32,6 +32,9 @@ export const incidentsApi = {
   search: (criteria: IncidentSearchCriteria, page: PageRequest = {}) =>
     apiFetch<PageResponse<IncidentResponse>>('/api/incidents/search', { query: { ...criteria, ...page } }),
 
+  /** The technician's unfinished incidents, most urgent first (sorted by the backend). */
+  queue: () => apiFetch<IncidentResponse[]>('/api/incidents/queue'),
+
   atRisk: () => apiFetch<IncidentResponse[]>('/api/incidents/at-risk'),
 
   impact: (id: string) => apiFetch<ImpactResponse>(`${incidentPath(id)}/impact`),

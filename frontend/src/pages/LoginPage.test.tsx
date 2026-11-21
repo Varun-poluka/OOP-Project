@@ -41,11 +41,15 @@ async function signIn() {
 
 // The app shell and pages load data (notifications, incident lists). Tests must never touch
 // the network, so fetch answers with empty data: [] for lists, an empty page for search.
+// The live stream never answers here (the promise stays pending until the test ends).
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = String(input)
+  if (url.includes('/api/stream')) return new Promise<Response>(() => {})
   const body = url.includes('/api/incidents/search')
     ? { content: [], page: 0, size: 15, totalElements: 0, totalPages: 0 }
-    : []
+    : url.includes('/api/notifications/unread-count')
+      ? { unreadCount: 0 }
+      : []
   return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
 }
 

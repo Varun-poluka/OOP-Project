@@ -29,6 +29,12 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   unauthorizedHandler = handler
 }
 
+/** The token was rejected: forget it and let the AuthProvider log out. Also used by the live stream. */
+export function handleUnauthorized(): void {
+  clearSession()
+  if (unauthorizedHandler !== null) unauthorizedHandler()
+}
+
 export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   const url = new URL(path, API_BASE_URL)
   if (query !== undefined) {
@@ -75,10 +81,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       problem?.title,
       fieldErrors ?? {},
     )
-    if (response.status === 401 && options.skipUnauthorizedHandler !== true) {
-      clearSession()
-      if (unauthorizedHandler !== null) unauthorizedHandler()
-    }
+    if (response.status === 401 && options.skipUnauthorizedHandler !== true) handleUnauthorized()
     throw apiError
   }
 

@@ -11,6 +11,8 @@ export type AuthContextValue = {
   logout: () => void
   /** Why the last session ended (null if none ended yet in this tab); the login page shows it. */
   lastLogoutReason: LogoutReason | null
+  /** Id of the user whose session ended last (null if none yet), so a page is only reopened for them. */
+  lastUserId: string | null
 }
 
 // null default: useAuth() throws if a component is used outside <AuthProvider>.

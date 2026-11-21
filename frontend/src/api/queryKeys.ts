@@ -6,12 +6,17 @@ import type { PageRequest } from './incidents'
 export const queryKeys = {
   incident: (id: string) => ['incidents', 'detail', id] as const,
   incidentLists: () => ['incidents', 'list'] as const,
+  // queue and at-risk sit under ['incidents', 'list'], so invalidating incidentLists() refreshes them too.
+  queue: () => ['incidents', 'list', 'queue'] as const,
+  atRisk: () => ['incidents', 'list', 'at-risk'] as const,
   incidentSearch: (criteria: IncidentSearchCriteria, page: PageRequest) =>
     ['incidents', 'list', 'search', criteria, page] as const,
   impact: (id: string) => ['incidents', 'impact', id] as const,
   recommendations: (id: string) => ['incidents', 'recommendations', id] as const,
   duplicates: (request: DuplicateCheckRequest) => ['incidents', 'duplicates', request] as const,
   notifications: (userId: string) => ['notifications', userId] as const,
+  // Its own prefix (not under ['notifications']): refetching the list must not refetch the count we just set.
+  unreadCount: (userId: string) => ['unread-count', userId] as const,
   services: () => ['services'] as const,
   categories: () => ['categories'] as const,
 }

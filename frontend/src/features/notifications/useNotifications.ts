@@ -5,9 +5,9 @@ import { notificationsApi } from '@/api/notifications'
 import { queryKeys } from '@/api/queryKeys'
 import type { NotificationResponse } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
+import { usePollWhileOffline } from '@/live/useLiveStatus'
 
-/** Notifications are polled every 30 s for now; live updates (server push) come later. */
-export const NOTIFICATION_POLL_MS = 30_000
+// While the live stream is up, a "notification" event refreshes these; polling only runs when it is down.
 
 /** The logged-in user's notifications, newest first (the backend sorts them). */
 export function useNotifications() {
@@ -17,25 +17,24 @@ export function useNotifications() {
     queryKey: queryKeys.notifications(userId),
     queryFn: () => notificationsApi.forUser(userId),
     enabled: userId !== '',
-    refetchInterval: NOTIFICATION_POLL_MS, // re-ask the server every 30 s while the tab is visible
+    refetchInterval: usePollWhileOffline(),
   })
 }
 
 /**
- * Number of unread notifications, for the badge in the top bar.
- * TODO(backend): if an unread-count endpoint is added, only this hook changes.
- * For now it reuses the notifications query: same cache key, so no extra request;
- * `select` derives the count, and the badge re-renders only when the count changes.
+ * Number of unread notifications, for the badge in the top bar, from
+ * GET /api/notifications/unread-count. A live "notification" event writes the new
+ * count straight into this query's cache (see live/eventToInvalidations.ts).
  */
 export function useUnreadCount(): number {
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const query = useQuery({
-    queryKey: queryKeys.notifications(userId),
-    queryFn: () => notificationsApi.forUser(userId),
+    queryKey: queryKeys.unreadCount(userId),
+    queryFn: notificationsApi.unreadCount,
     enabled: userId !== '',
-    refetchInterval: NOTIFICATION_POLL_MS,
-    select: (notifications) => notifications.filter((n) => !n.read).length,
+    refetchInterval: usePollWhileOffline(),
+    select: (response) => response.unreadCount,
   })
   return query.data ?? 0
 }
@@ -44,14 +43,16 @@ export function useUnreadCount(): number {
 export function useMarkAsRead() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const key = queryKeys.notifications(user?.id ?? '')
+  const userId = user?.id ?? ''
   return useMutation({
     mutationFn: (id: number) => notificationsApi.markAsRead(id),
     onSuccess: (updated) => {
-      // Replace just that item in the cached list, so the dot and the badge update without a refetch.
-      queryClient.setQueryData<NotificationResponse[]>(key, (old) =>
+      // Replace just that item in the cached list, so its dot updates without a refetch.
+      queryClient.setQueryData<NotificationResponse[]>(queryKeys.notifications(userId), (old) =>
         old?.map((n) => (n.id === updated.id ? updated : n)),
       )
+      // The count lives in its own query now; ask the server for the new number.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount(userId) })
     },
     onError: (error) => toast.error(errorMessage(error)),
   })

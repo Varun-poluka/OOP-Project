@@ -435,3 +435,66 @@ frontend and backend work can happen in parallel without editing the same file.
     didn't fix it. The final two steps (verify, close) were therefore triggered with
     JavaScript `element.click()`. That runs the same handlers, dialogs and API calls, and
     every earlier step used real clicks.
+
+---
+
+### 2026-11-21: Frontend slice F3 · Live updates, technician screens, fixes
+
+- **What was built:**
+  - *Live updates:* the app keeps one Server-Sent Events stream (`GET /api/stream`) open
+    while someone is signed in. A pill in the top bar shows "Live" or "Reconnecting".
+  - *My queue:* the technician's real unfinished incidents, with one SLA column ("Respond
+    in 3m", "Resolve in 4h 11m", "Breached"), a risk badge, a red edge on P1 rows and
+    Acknowledge / Start work buttons that ask for confirmation.
+  - *At risk:* a new technician page, breached first, then by how much SLA time is used,
+    with a bar per row.
+  - *Fixes:* categories and the unread count come from the real endpoints; notifications
+    open their incident; the login panel says who acts at each step; after a session
+    expires, only the *same* user is sent back to the page they were on.
+- **Why:** before this, every screen polled every 30 s and the technician queue was sample
+  data. Now a change made by one person (an admin assigning) shows up for another (the
+  technician) within a second, without a reload.
+
+- **Files:**
+  - *Live:* `src/live/backoff.ts`, `liveConnection.ts` (reconnect / stop rules),
+    `openLiveStream.ts` (the fetch-based stream), `eventToInvalidations.ts` (event → cache
+    changes), `LiveUpdatesProvider.tsx`, `liveContext.ts`, `useLiveStatus.ts`,
+    `src/layout/LiveIndicator.tsx`. `src/api/client.ts` gained `handleUnauthorized()`.
+  - *API:* `categories.ts`, `notifications.ts` (`unreadCount`), `incidents.ts` (`queue`),
+    `queryKeys.ts` (`queue`, `atRisk`, `unreadCount`), `types.ts`.
+  - *Technician:* `src/pages/technician/MyQueuePage.tsx`, `AtRiskPage.tsx`,
+    `src/features/incidents/atRisk.ts`, `mostUrgentClock` in
+    `src/features/incident/slaClocks.ts`, `src/components/UrgentClockBadge.tsx`,
+    `SlaUsageBar.tsx` (taken out of `SlaPanel`), `src/features/incident/actionMeta.ts` and
+    `src/lib/slaTone.ts` (shared constants moved out of component files).
+  - *Auth:* `AuthProvider.tsx` / `authContext.ts` (`lastUserId`), `RequireAuth.tsx`,
+    `LoginPage.tsx`.
+  - *Tests:* `liveConnection.test.ts`, `eventToInvalidations.test.ts`,
+    `slaClocks.test.ts`, `atRisk.test.ts`, `RequireAuth.test.tsx` (148 tests in total).
+
+- **Key concepts:**
+  - **Server-Sent Events (SSE):** an HTTP response that never finishes. The server keeps
+    writing small `event:` / `data:` messages into it. It only goes server → browser, which
+    is all we need. The browser's built-in `EventSource` cannot send an `Authorization`
+    header, so the token would have to go in the URL (where it ends up in logs). So we use
+    `@microsoft/fetch-event-source`, which does the same over `fetch` and accepts headers.
+  - **Cache invalidation from events:** an event says *what* changed, not the new data.
+    `eventToInvalidations` (a pure function) turns it into "mark these queries stale".
+    TanStack Query then refetches the ones on screen. Data still arrives through one
+    path, the normal queries. The one exception is the unread count, which the event
+    carries, so we write it straight into the cache.
+  - **Exponential backoff:** after a failed connection, wait 1 s, then 2 s, 4 s … up to 30 s
+    before trying again; reset after a success. A down backend is not flooded, a blip heals
+    fast. A 401 stops for good: retrying with a rejected token can't help.
+  - **Dependency injection for testing:** `createLiveConnection` receives the function
+    that opens the stream. Tests pass a fake one and use Vitest's fake timers to "wait"
+    30 s instantly.
+  - **Derived UI state:** values computed from data instead of stored separately. Examples:
+    the queue's SLA label (`mostUrgentClock`), the at-risk order (`select: sortAtRisk`),
+    and "poll only while offline" (`refetchInterval` from the live status). Nothing can
+    go out of sync because there is no second copy.
+
+- **Verification:** build, lint and tests pass. curl: `/api/categories` 200,
+  `/api/notifications/unread-count` 200. `/api/incidents/queue` returned 404 because the
+  running backend didn't have that change yet, so the browser walkthrough (two windows,
+  assign → queue updates live) is left for a manual check after the backend restart.

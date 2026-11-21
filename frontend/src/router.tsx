@@ -12,6 +12,7 @@ import { MyIncidentsPage } from '@/pages/employee/MyIncidentsPage'
 import { ReportIncidentPage } from '@/pages/employee/ReportIncidentPage'
 import { IncidentDetailPage } from '@/pages/shared/IncidentDetailPage'
 import { NotificationsPage } from '@/pages/shared/NotificationsPage'
+import { AtRiskPage } from '@/pages/technician/AtRiskPage'
 import { MyQueuePage } from '@/pages/technician/MyQueuePage'
 
 // Nested routes: a parent's element renders its matched child at <Outlet/>.
@@ -33,6 +34,7 @@ export const routes: RouteObject[] = [
               { path: '/incidents/mine', element: <MyIncidentsPage /> },
               // Technician
               { path: '/queue', element: <MyQueuePage /> },
+              { path: '/at-risk', element: <AtRiskPage /> },
               // Admin
               { path: '/admin', element: <DashboardPage /> },
               { path: '/admin/search', element: <SearchPage /> },
