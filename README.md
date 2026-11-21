@@ -73,10 +73,13 @@ npm run dev                              # http://localhost:5173 (the only origi
 
 ### Tests and coverage
 ```bash
-cd backend && ./mvnw verify              # 236 tests; needs PostgreSQL with itsm_test
+cd backend && ./mvnw verify              # 249 tests; needs PostgreSQL with itsm_test
 cd frontend && npm test                  # Vitest
 ```
-The backend coverage report is written to `backend/target/site/jacoco/index.html`.
+The backend coverage report is written to `backend/target/site/jacoco/index.html` (86.2% of lines).
+`config/DemoDataLoader` is excluded from coverage (`backend/pom.xml`). It is demo-data scaffolding
+that only runs with the `demo` profile, and it is checked by running it against a scratch database,
+not by unit tests. Counting it would only measure that no test runs it.
 
 ## Demo logins
 Every user has the password `password123`. The first four also exist without the demo profile.
@@ -105,7 +108,8 @@ Every user has the password `password123`. The first four also exist without the
 - SLA response and resolution deadlines per priority, checked every minute; at-risk warning at 75%
   of the window, breach flags, at-risk list and a per-technician work queue sorted by urgency
 - Service dependency graph with impact analysis (which services an outage affects, and how far away)
-- In-app and (logged) email notifications; live updates to the browser over Server-Sent Events
+- In-app and (logged) email notifications in plain language ("Response SLA at risk: response due by
+  21 Nov, 6:50 PM"); live updates to the browser over Server-Sent Events
 - Search with filters, paging and sorting; report summary for admins
 - JWT login with role-based access (Employee, Technician, Administrator)
 
@@ -140,7 +144,7 @@ Errors are returned as `application/problem+json`; a refused lifecycle action is
 | `GET` / `PUT /api/admin/assignment-strategy` | Admin | Current / change assignment strategy |
 | `POST /api/admin/sla/check` | Admin | Run the SLA check now |
 | `GET /api/admin/sla/policies`, `PUT /api/admin/sla/policies/{priority}` | Admin | Read / change SLA targets |
-| `GET /api/reports/summary` | Admin | Counts by status, priority, category, SLA and technician workload |
+| `GET /api/reports/summary` | Admin | For `from`/`to` (default last 30 days): counts by status, priority, category, SLA compliance, technician workload. Plus the current backlog, independent of the range: `openIncidents` and `openByPriority` (P1–P4, 0 when none) |
 | `GET /api/services` | any user | Services with dependencies and open incident counts |
 | `GET /api/services/{id}/impact` | Technician, Admin | Impacted services with distance in hops |
 | `POST /api/services` | Admin | Create a service |

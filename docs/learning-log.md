@@ -529,3 +529,57 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - `GET /api/users/U-EMP-1/notifications`: 27 notifications, 0 with a null `incidentId`, 10 unread.
     - `POST /api/incidents/duplicates/check` with a Ram Bhawan Wi-Fi draft: found INC-0030.
     - Database: no audit row has a timestamp in the future.
+
+---
+
+### 2026-11-21: Slice 6 · Readable notifications, report backlog, coverage exclusion
+- **What was built:**
+  - Notification and email texts now come from `NotificationMessageFormatter`, for example
+    "INC-0026 (Lab 3 PCs stuck): Response SLA breached: not acknowledged by 20 Nov, 1:26 PM".
+  - `GET /api/reports/summary` gained `openIncidents` and `openByPriority`.
+  - JaCoCo no longer counts `DemoDataLoader`.
+- **Why:** raw codes and ISO times (`SLA_RESPONSE_BREACHED - Not Acknowledged by 2026-11-20T13:26:22`)
+  were not readable for users; the admin dashboard needs the current backlog; coverage should
+  measure code that tests are meant to cover.
+- **Files:**
+  - `service/notification/NotificationMessageFormatter.java` (new): pure static class, one sentence
+    per action. "Assigned to you" only for the assigned technician, times as "21 Nov, 6:50 PM",
+    impact lists capped at 3 names + "and N more", 500-character cut.
+  - `NotificationRules`: `message()` removed (it now only decides who is notified).
+  - `InAppNotificationListener`, `EmailNotificationListener`: call the formatter and say whether the
+    recipient is the assigned technician.
+  - `IncidentRepository.countOpenByPriority`, `ReportService`, `ReportSummary`: the backlog.
+  - `pom.xml`: JaCoCo `<excludes>`.
+  - Tests: `NotificationMessageFormatterTest` (13), a new case in `NotificationIntegrationTest` and
+    `ReportSummaryIntegrationTest`; the two message tests left `NotificationRulesTest`.
+- **Key concepts:**
+  - **Data vs presentation:** audit records keep their codes and exact times, because they are data
+    that reports and the frontend read. Only the text for people is formatted, at the edge where it
+    is sent.
+  - **Reading our own description text (option A, no domain change):** the due time and the service
+    list exist only inside descriptions written by `Incident` and `IncidentService`. The formatter
+    finds the time with a regular expression and splits the list after "may impact:". If a marker is
+    missing, it shows the description unchanged instead of failing. Guard tests run real
+    `Incident.checkSla` / `checkSlaRisk` output and a real report through the formatter, so rewording
+    those texts breaks a test.
+  - **`DateTimeFormatter` with `Locale.ENGLISH`:** the pattern `d MMM, h:mm a` gives "21 Nov, 6:50 PM"
+    whatever language the server runs in.
+  - **One grouped count query:** `group by i.priority` over all unfinished incidents returns one
+    `CountRow` per priority (UNCLASSIFIED for NEW ones). `openIncidents` is the sum of all rows. The
+    `EnumMap` is pre-filled with 0 for P1–P4, so every key is always present. NEW incidents count in
+    the total but under no key, so the four values can add up to less.
+  - **JaCoCo excludes:** class-file patterns; `DemoDataLoader*` also matches the inner class
+    `DemoDataLoader$Story`. Coverage rose from 74.7% to 86.2% of lines.
+- **How it was tested:**
+  - `./mvnw verify`: 249 tests pass, BUILD SUCCESS.
+  - On port 8081 against `itsm_demo_check`:
+    - `GET /api/reports/summary?from=2000-01-01T00:00&to=2000-02-01T00:00` gave `totalIncidents 0`,
+      `openIncidents 17`, `openByPriority {P1:1, P2:3, P3:9, P4:2}`. The default range gave
+      `totalIncidents 39` and the same open figures. The 2 NEW incidents explain 17 vs 15.
+    - A NETWORK report on Network (INC-0040):
+      - Admin: "Priority raised from P3 to P2: …" and "Service impact: an outage of Network may
+        affect SSO, Monitoring, Campus Wi-Fi and 8 more".
+      - Kiran: "Assigned to you". Asha: "Assigned to Kiran Support" and "Classified as P2".
+    - `POST /api/admin/sla/check`: the new notifications and `[EMAIL]` log lines read e.g. "Response
+      SLA breached: not acknowledged by 21 Nov, 6:31 PM". Notifications created before this slice
+      keep the old text until the demo data is reset.

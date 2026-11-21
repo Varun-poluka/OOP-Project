@@ -85,6 +85,37 @@ class ReportSummaryIntegrationTest {
                 .andExpect(jsonPath("$.technicians").isNotEmpty()); // technicians are listed with zeros
     }
 
+    // The backlog is "open now": the same with a range in the year 2000 as with the default range.
+    @Test
+    void openCountsIgnoreTheDateRange() throws Exception {
+        String id = api.reportUnassigned(api.login(EMPLOYEE), marker()); // stays CLASSIFIED, so it is open
+        String incident = mvc.perform(get("/api/incidents/" + id).header("Authorization", admin))
+                .andReturn().getResponse().getContentAsString();
+        String priority = JsonPath.read(incident, "$.priority");
+
+        String oldRange = mvc.perform(get("/api/reports/summary").header("Authorization", admin)
+                        .param("from", LocalDateTime.of(2000, 1, 1, 0, 0).toString())
+                        .param("to", LocalDateTime.of(2000, 2, 1, 0, 0).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalIncidents").value(0))
+                .andExpect(jsonPath("$.openByPriority.P1").exists())
+                .andExpect(jsonPath("$.openByPriority.P2").exists())
+                .andExpect(jsonPath("$.openByPriority.P3").exists())
+                .andExpect(jsonPath("$.openByPriority.P4").exists())
+                .andReturn().getResponse().getContentAsString();
+        String defaultRange = mvc.perform(get("/api/reports/summary").header("Authorization", admin))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        int open = JsonPath.read(oldRange, "$.openIncidents");
+        assertTrue(open >= 1);
+        assertTrue((int) JsonPath.read(oldRange, "$.openByPriority." + priority) >= 1);
+        // NEW incidents have no priority, so the four keys add up to at most openIncidents.
+        assertTrue(sum(JsonPath.read(oldRange, "$.openByPriority.*")) <= open);
+        assertEquals(open, (int) JsonPath.read(defaultRange, "$.openIncidents"));
+        assertEquals((Object) JsonPath.read(oldRange, "$.openByPriority"), JsonPath.read(defaultRange, "$.openByPriority"));
+    }
+
     @Test
     void fromMustBeBeforeTo() throws Exception {
         mvc.perform(get("/api/reports/summary").header("Authorization", admin)

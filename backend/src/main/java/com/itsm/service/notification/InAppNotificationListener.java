@@ -32,7 +32,8 @@ public class InAppNotificationListener implements IncidentEventListener {
         }
         if (NotificationRules.shouldNotifyAdmins(event)) {
             for (User admin : userRepository.findAdministrators()) {
-                notificationRepository.save(new Notification(admin, event.incidentId(), NotificationRules.message(event)));
+                notificationRepository.save(new Notification(admin, event.incidentId(),
+                        NotificationMessageFormatter.format(event, false)));
             }
         }
     }
@@ -41,7 +42,8 @@ public class InAppNotificationListener implements IncidentEventListener {
         Optional<User> user = userRepository.findById(userId);
         if (user.isPresent()) {
             notificationRepository.save(
-                    new Notification(user.get(), event.incidentId(), NotificationRules.message(event)));
+                    new Notification(user.get(), event.incidentId(),
+                            NotificationMessageFormatter.format(event, userId.equals(event.technicianId()))));
         }
     }
 }

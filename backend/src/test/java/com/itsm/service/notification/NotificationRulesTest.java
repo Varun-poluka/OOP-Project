@@ -8,7 +8,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,18 +75,5 @@ class NotificationRulesTest {
     @Test
     void noTechnicianMeansNoTechnicianNotification() {
         assertFalse(NotificationRules.shouldNotifyTechnician(event("SLA_RESPONSE_BREACHED", null, null, "late")));
-    }
-
-    @Test
-    void messageNamesTheIncidentAndAction() {
-        assertEquals("INC-0001 (Printer jam): RESOLVED - details",
-                NotificationRules.message(event("RESOLVED", TECH)));
-    }
-
-    @Test
-    void longMessagesAreCutTo500Characters() {
-        String message = NotificationRules.message(event("NOTE_ADDED", TECH, TECH, "x".repeat(1000)));
-        assertEquals(500, message.length());
-        assertTrue(message.endsWith("..."));
     }
 }

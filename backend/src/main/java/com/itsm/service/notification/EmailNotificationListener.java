@@ -22,20 +22,20 @@ public class EmailNotificationListener implements IncidentEventListener {
     @Override
     public void onIncidentEvent(IncidentEvent event) {
         if (NotificationRules.shouldNotifyReporter(event)) {
-            sendEmail(event.reporterEmail(), event);
+            sendEmail(event.reporterEmail(), event, false);
         }
         if (NotificationRules.shouldNotifyTechnician(event)) {
-            sendEmail(event.technicianEmail(), event);
+            sendEmail(event.technicianEmail(), event, true);
         }
         if (NotificationRules.shouldNotifyAdmins(event)) {
             for (User admin : userRepository.findAdministrators()) {
-                sendEmail(admin.getEmail(), event);
+                sendEmail(admin.getEmail(), event, false);
             }
         }
     }
 
-    private void sendEmail(String to, IncidentEvent event) {
+    private void sendEmail(String to, IncidentEvent event, boolean toAssignedTechnician) {
         log.info("[EMAIL] To: {} | Subject: Incident {} {} | Body: {}",
-                to, event.incidentId(), event.action(), NotificationRules.message(event));
+                to, event.incidentId(), event.action(), NotificationMessageFormatter.format(event, toAssignedTechnician));
     }
 }

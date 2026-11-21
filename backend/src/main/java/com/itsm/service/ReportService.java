@@ -4,6 +4,7 @@ import com.itsm.domain.Incident;
 import com.itsm.domain.IncidentStatus;
 import com.itsm.domain.Priority;
 import com.itsm.domain.Technician;
+import com.itsm.dto.CountRow;
 import com.itsm.dto.ReportSummary;
 import com.itsm.dto.SlaSummary;
 import com.itsm.dto.TechnicianWorkload;
@@ -51,6 +52,8 @@ public class ReportService {
 
         // Loaded once and reused for the totals, the SLA figures and the workload.
         List<Incident> incidents = incidentRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(from, to);
+        // The backlog ignores from/to: it is what is open now.
+        List<CountRow> open = incidentRepository.countOpenByPriority(RESOLVED_STATUSES);
 
         Map<Priority, SlaSummary> byPriority = new EnumMap<>(Priority.class);
         for (Priority priority : Priority.values()) {
@@ -72,7 +75,32 @@ public class ReportService {
                 incidentRepository.countByCategory(from, to),
                 slaSummary(incidents),
                 byPriority,
-                workload(incidents));
+                workload(incidents),
+                sum(open),
+                openByPriority(open));
+    }
+
+    // One row per priority present, plus UNCLASSIFIED for NEW incidents.
+    private static long sum(List<CountRow> rows) {
+        long total = 0;
+        for (CountRow row : rows) {
+            total += row.count();
+        }
+        return total;
+    }
+
+    // All four priorities, starting at 0, so the client never has to handle a missing key.
+    private static Map<Priority, Long> openByPriority(List<CountRow> rows) {
+        Map<Priority, Long> result = new EnumMap<>(Priority.class);
+        for (Priority priority : Priority.values()) {
+            result.put(priority, 0L);
+        }
+        for (CountRow row : rows) {
+            if (!row.key().equals("UNCLASSIFIED")) {
+                result.put(Priority.valueOf(row.key()), row.count());
+            }
+        }
+        return result;
     }
 
     private SlaSummary slaSummary(List<Incident> incidents) {

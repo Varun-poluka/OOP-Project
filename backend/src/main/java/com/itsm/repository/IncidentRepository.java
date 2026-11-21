@@ -53,4 +53,13 @@ public interface IncidentRepository extends JpaRepository<Incident, String>, Jpa
             group by i.category.name
             order by i.category.name""")
     List<CountRow> countByCategory(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    // Unfinished incidents per priority, with no date filter (the current backlog).
+    // NEW incidents have no priority yet, so they are grouped as UNCLASSIFIED.
+    @Query("""
+            select new com.itsm.dto.CountRow(coalesce(cast(i.priority as String), 'UNCLASSIFIED'), count(i))
+            from Incident i
+            where i.status not in :finished
+            group by i.priority""")
+    List<CountRow> countOpenByPriority(@Param("finished") Collection<IncidentStatus> finished);
 }

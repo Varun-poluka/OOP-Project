@@ -15,4 +15,9 @@ public record ReportSummary(
         List<CountRow> byCategory,
         SlaSummary overall,
         Map<Priority, SlaSummary> byPriorityPerformance,
-        List<TechnicianWorkload> technicians) { }
+        List<TechnicianWorkload> technicians,
+        // Current backlog, independent of from/to: every incident not yet RESOLVED, VERIFIED or CLOSED.
+        long openIncidents,
+        // P1..P4 always present (0 when none). NEW incidents have no priority yet, so they count in
+        // openIncidents but under no key here: the four values can add up to less than openIncidents.
+        Map<Priority, Long> openByPriority) { }
