@@ -41,4 +41,31 @@ public final class IncidentTestData {
         incident.overrideTimestampsForTest(createdAt, acknowledgedAt, resolvedAt);
         return incident;
     }
+
+    // A NEW incident with the given text, created at createdAt. If resolved is true it is taken
+    // through assign -> acknowledge -> start -> resolve, so its status is RESOLVED.
+    public static Incident reported(String title, String description, String categoryName, ITService service,
+                                    LocalDateTime createdAt, boolean resolved) {
+        counter++;
+        Employee reporter = new Employee("U-EMP-T" + counter, "Test Employee", "emp" + counter + "@test.local", "hash");
+        Incident incident = new Incident("INC-T" + counter, title, description, reporter,
+                new Category(categoryName, categoryName), service, Impact.MEDIUM, Urgency.MEDIUM);
+        if (resolved) {
+            Technician tech = new Technician("U-TEC-T" + counter, "Test Tech", "tech" + counter + "@test.local", "hash", 5);
+            incident.classify(Priority.P3);
+            incident.assignTo(tech);
+            incident.acknowledge(tech);
+            incident.startWork(tech);
+            incident.resolve(tech, "Fixed in test");
+        }
+        incident.overrideTimestampsForTest(createdAt, incident.getAcknowledgedAt(), incident.getResolvedAt());
+        return incident;
+    }
+
+    // Raises a technician's open-incident count (addIncident is package-private in the domain).
+    public static void giveActiveIncidents(Technician tech, int count) {
+        for (int i = 0; i < count; i++) {
+            tech.addIncident();
+        }
+    }
 }

@@ -7,6 +7,10 @@ import com.itsm.domain.exception.UnauthorizedActionException;
 import com.itsm.domain.strategy.PriorityCalculator;
 import com.itsm.dto.*;
 import com.itsm.repository.*;
+import com.itsm.service.intelligence.ImpactedService;
+import com.itsm.service.intelligence.IncidentText;
+import com.itsm.service.intelligence.RiskLevel;
+import com.itsm.service.intelligence.ServiceImpactAnalyzer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -14,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -22,6 +27,8 @@ import java.util.Set;
 public class IncidentService {
 
     private static final Set<String> SORTABLE_FIELDS = Set.of("createdAt", "priority", "status", "title");
+    private static final List<IncidentStatus> FINISHED =
+            List.of(IncidentStatus.RESOLVED, IncidentStatus.VERIFIED, IncidentStatus.CLOSED);
 
     private final IncidentRepository incidentRepository;
     private final UserRepository userRepository;
@@ -32,6 +39,8 @@ public class IncidentService {
     private final AssignmentStrategySelector strategySelector;
     private final IncidentEventPublisher eventPublisher;
     private final SLAPolicyRepository slaPolicyRepository;
+    private final ServiceImpactAnalyzer impactAnalyzer;
+    private final DuplicateService duplicateService;
 
     public IncidentService(IncidentRepository incidentRepository,
                            UserRepository userRepository,
@@ -41,7 +50,11 @@ public class IncidentService {
                            PriorityCalculator priorityCalculator,
                            AssignmentStrategySelector strategySelector,
                            IncidentEventPublisher eventPublisher,
-                           SLAPolicyRepository slaPolicyRepository) {
+                           SLAPolicyRepository slaPolicyRepository,
+                           ServiceImpactAnalyzer impactAnalyzer,
+                           DuplicateService duplicateService) {
+        this.impactAnalyzer = impactAnalyzer;
+        this.duplicateService = duplicateService;
         this.eventPublisher = eventPublisher;
         this.incidentRepository = incidentRepository;
         this.userRepository = userRepository;
@@ -114,7 +127,8 @@ public class IncidentService {
 
     @Transactional
     public IncidentResponse report(CreateIncidentRequest request, String actorId) {
-        Employee reporter = findReporter(request, findUser(actorId));
+        User actor = findUser(actorId);
+        Employee reporter = findReporter(request, actor);
 
         String categoryName = request.categoryName().toUpperCase();
         Category category = categoryRepository.findById(categoryName)
@@ -126,9 +140,24 @@ public class IncidentService {
         Incident incident = new Incident(nextIncidentId(), request.title(), request.description(),
                 reporter, category, service, request.impact(), request.urgency());
 
-        Priority priority = priorityCalculator.calculate(request.impact(), request.urgency(), service.getBusinessCriticality());
+        // Reporting never blocks on duplicates: they are only returned as a hint.
+        List<DuplicateCandidateResponse> duplicates = duplicateService.find(IncidentText.of(incident), actor);
+
+        // base = what the plain weighted formula says; priority = after the dependency-aware decorator.
+        Priority base = priorityCalculator.calculate(request.impact(), request.urgency(), service.getBusinessCriticality());
+        Priority priority = priorityCalculator.calculate(request.impact(), request.urgency(), service);
         incident.classify(priority);
         incident.startSla(findPolicy(priority));
+
+        List<ImpactedService> impacted = impactAnalyzer.analyze(service, itServiceRepository.findAll());
+        if (priority != base) {
+            incident.recordSystemEvent("PRIORITY_RAISED", "Raised from " + base + " to " + priority
+                    + ": an outage of " + service.getName() + " impacts " + impacted.size() + " dependent services");
+        }
+        if (!impacted.isEmpty()) {
+            incident.recordSystemEvent("SERVICE_IMPACT", "An outage of " + service.getName()
+                    + " may impact: " + describe(impacted));
+        }
 
         List<Technician> candidates = technicianRepository.findByAvailableTrue();
         Optional<Technician> chosen = strategySelector.getCurrent().selectTechnician(incident, candidates);
@@ -138,7 +167,54 @@ public class IncidentService {
 
         Incident saved = incidentRepository.save(incident);
         eventPublisher.publishNewEvents(saved,0);
-        return IncidentResponse.from(saved);
+        return IncidentResponse.from(saved).withPossibleDuplicates(duplicates);
+    }
+
+    private static String describe(List<ImpactedService> impacted) {
+        StringBuilder text = new StringBuilder();
+        for (ImpactedService item : impacted) {
+            if (text.length() > 0) {
+                text.append(", ");
+            }
+            text.append(item.service().getName()).append(" (").append(item.distance()).append(" hop")
+                    .append(item.distance() == 1 ? "" : "s").append(")");
+        }
+        return text.toString();
+    }
+
+    // Unfinished incidents at HIGH risk, flagged at risk, or already breached; breached first, then by share of window used.
+    @Transactional(readOnly = true)
+    public List<IncidentResponse> atRisk(String actorId) {
+        User actor = findUser(actorId);
+        List<Incident> incidents;
+        if (actor instanceof Technician) {
+            incidents = incidentRepository.findByAssignedTechnicianIdAndStatusNotIn(actorId, FINISHED);
+        } else if (actor instanceof Administrator) {
+            incidents = incidentRepository.findByStatusNotIn(FINISHED);
+        } else {
+            throw new UnauthorizedActionException("Only technicians and administrators can view at-risk incidents");
+        }
+        List<IncidentResponse> result = new ArrayList<>();
+        for (Incident incident : incidents) {
+            IncidentResponse response = IncidentResponse.from(incident);
+            // Also include incidents the SLA check flagged as at risk whose clock is still running.
+            boolean flagged = (incident.isResponseAtRisk() && incident.getAcknowledgedAt() == null)
+                    || (incident.isResolutionAtRisk() && incident.getResolvedAt() == null);
+            if (flagged || response.riskLevel() == RiskLevel.HIGH || response.riskLevel() == RiskLevel.BREACHED) {
+                result.add(response);
+            }
+        }
+        result.sort(Comparator.comparing((IncidentResponse r) -> r.riskLevel() != RiskLevel.BREACHED)
+                .thenComparing(r -> (r.slaPercentUsed() == null) ? 0 : r.slaPercentUsed(), Comparator.reverseOrder()));
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public ImpactResponse impact(String incidentId, String actorId) {
+        Incident incident = findIncident(incidentId);
+        requireCanView(incident, findUser(actorId));
+        ITService service = incident.getAffectedService();
+        return ImpactResponse.from(service, impactAnalyzer.analyze(service, itServiceRepository.findAll()));
     }
 
     @Transactional(readOnly = true)

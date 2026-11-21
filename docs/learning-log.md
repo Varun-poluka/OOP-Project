@@ -181,3 +181,142 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - Per role, one allowed and one forbidden call.
     - Notification ownership, the CORS preflight (5173 allowed, another origin 403), and the
       Swagger security scheme.
+
+---
+
+### 2026-11-21: Slice 3 · Intelligent features and service-dependency impact
+
+- **What was built:** four "intelligent" features.
+  1. **Duplicate detection** when an incident is reported.
+  2. **Technician recommendations** for an incident.
+  3. **SLA risk prediction**: warnings before a breach.
+  4. **Service-dependency impact analysis**, which can raise an incident's priority.
+- **Why:**
+  - Duplicates waste technician time.
+  - Admins need a reasoned suggestion of who should fix an incident.
+  - A breach alarm comes too late, so we also need a warning before it.
+  - An outage of a core service like Network hurts every service built on it, so its
+    priority should reflect that.
+- **Domain changes (each one approved):**
+  - `Incident`:
+    - `responseAtRisk` / `resolutionAtRisk` flags, `RISK_THRESHOLD = 0.75` and
+      `checkSlaRisk(now)`, which mirrors `checkSla`.
+    - `recordSystemEvent(action, description)`: an audit-only SYSTEM record, used for
+      PRIORITY_RAISED and SERVICE_IMPACT.
+  - `PriorityCalculator`: a default service-aware `calculate(impact, urgency, ITService)`,
+    so a decorator can see which service failed.
+  - `ITService`: `removeDependency` and `dependsOn`.
+- **Files:**
+  - `service/intelligence/` (pure Java, no Spring):
+    - `DuplicateDetector`, `TokenSimilarityDuplicateDetector`, `IncidentText`,
+      `DuplicateMatch`: duplicate detection.
+    - `TechnicianScorer`, `TechnicianScore`: recommendation scoring.
+    - `SlaRiskAssessor`, `SlaRisk`, `RiskLevel`: SLA risk levels.
+    - `ServiceImpactAnalyzer`, `ImpactedService`: the dependency graph search.
+    - `DependencyAwarePriorityCalculator`: the decorator.
+  - `config/IntelligenceConfig`: registers those classes as beans, and makes the decorator
+    the `@Primary` `PriorityCalculator`.
+  - `service/`:
+    - `DuplicateService`, `RecommendationService`, `ServiceCatalogService` are new.
+    - `IncidentService` changes: the report flow, `atRisk` and `impact`.
+    - `SlaService` changes: `checkAll` now also runs the risk check.
+    - `SlaScheduler` logs both counts.
+  - `service/notification/`: admins are notified of at-risk, PRIORITY_RAISED and
+    SERVICE_IMPACT events. The technician also gets at-risk events. The reporter gets none
+    of these internal warnings.
+  - `controller/`:
+    - `ServiceController` is new (`/api/services`).
+    - `IncidentController` gains `duplicates/check`, `at-risk`, `{id}/recommendations` and
+      `{id}/impact`.
+  - `config/SecurityConfig`: the role rules for the new URLs.
+  - `config/DataSeeder`: `seedServiceGraph()` on every start (find-or-create, never deletes).
+  - `dto/`:
+    - New: `DuplicateCheckRequest`, `DuplicateCandidateResponse`,
+      `TechnicianRecommendationResponse`, `ServiceResponse`, `ServiceRef`,
+      `ImpactResponse`, `CreateServiceRequest`.
+    - Changed: `IncidentResponse` gains risk fields and `possibleDuplicates`;
+      `SlaCheckResponse` gains `risksRecorded`.
+  - `repository/`: new finders and counters, and `UserRepository.findAdministrators()`
+    (JPQL `type(u) = Administrator`).
+- **Key concepts:**
+  - **Jaccard similarity:** treat each text as a *set* of words. Similarity = shared words /
+    all distinct words = |A ∩ B| / |A ∪ B|, from 0 (nothing shared) to 1 (same words).
+    - First we lowercase, turn punctuation into spaces and drop *stop words* ("the", "is",
+      "in"), because those words appear everywhere and would make unrelated texts look
+      alike.
+    - Score = 0.6 · J(title) + 0.4 · J(description), plus 0.15 for the same category and
+      0.15 for the same service, capped at 1.0. The title gets more weight because it is
+      short and focused, while descriptions ramble.
+    - Only open incidents from the last 7 days are compared, with a threshold of 0.5 and the
+      top 3 kept.
+    - Reporting never blocks: duplicates are a hint. Employees see only the id, title and
+      status of a match (`@JsonInclude(NON_NULL)` drops the null score and reasons), so no
+      one else's details leak.
+  - **Weighted scoring (technician recommendations):** each factor earns points, and the
+    points add up to 100.
+    - **Skill, 40:** has the category skill. The biggest weight, because without the skill
+      the person probably can't fix it.
+    - **Spare capacity, 25:** 25 × free slots / max workload, and 0 if `canTakeMoreWork()`
+      is false. It spreads work and avoids queues.
+    - **Experience, 20:** 20 × min(resolved in category, 5) / 5. Capped at 5 so a veteran
+      doesn't win on history alone.
+    - **Available, 15:** the technician is marked available.
+    - Ranking puts available technicians first, so an unavailable one is never recommended
+      first, even with a high score. Each factor adds a human-readable reason, so the admin
+      can see *why*.
+  - **Leading vs lagging indicators:**
+    - A breach is a *lagging* indicator: it tells you after the fact.
+    - "At risk" (≥ 75% of a running clock's window used) is a *leading* indicator: it warns
+      while there is still time to act.
+    - `checkSlaRisk` sets each flag once (idempotent: running it again changes nothing) and
+      adds an audit record. The Observer publisher then notifies the technician and the
+      admins.
+    - `riskLevel` (NONE / LOW < 50% / MEDIUM 50–75% / HIGH ≥ 75% / BREACHED) is computed
+      when each response is built, from the most urgent running clock.
+    - `/api/incidents/at-risk` lists HIGH, BREACHED and flagged incidents.
+  - **BFS and cycle safety:**
+    - "A depends on B" means an outage of B impacts A, so we follow the edges backwards.
+    - Breadth-first search uses a queue, so it visits all services 1 hop away, then 2 hops,
+      and so on. The hop count is the distance.
+    - A *visited set* stops the search from revisiting a service. Without it, the seeded
+      cycle DNS → Monitoring → Network → DNS would loop forever.
+    - The set and the reverse graph are keyed by **service id**, not by Java object. Two
+      objects loaded in different persistence contexts can be the same database row, and a
+      unit test checks exactly that case.
+  - **Decorator vs Strategy:**
+    - *Strategy* swaps one algorithm for another behind an interface:
+      `WeightedPriorityCalculator` is one priority strategy.
+    - *Decorator* wraps an object of the same interface and adds behaviour around it,
+      without changing it. `DependencyAwarePriorityCalculator` asks the inner calculator,
+      then raises the result one level (never above P1) if 3 or more services are impacted.
+    - `IncidentService` still only knows "a `PriorityCalculator`". `@Primary` tells Spring to
+      inject the decorator, because two beans now implement the interface.
+    - The service compares the base and the decorated priority and audits PRIORITY_RAISED
+      with the reason.
+  - **Adding columns to a table with rows:** with `ddl-auto=update`, Hibernate adds the new
+    columns to the existing table. A plain `boolean not null` column can't be added when
+    rows already exist, so the new columns use `columnDefinition = "boolean default false"`,
+    which fills the existing rows.
+- **How it was tested:**
+  - `./mvnw test`: 65 tests pass.
+    - Unit tests for:
+      - the detector: tokens, Jaccard, weights, cap, filters, top 3;
+      - the scorer: each factor, and an unavailable technician ranked last;
+      - risk levels at their boundaries, and `checkSlaRisk` idempotency;
+      - the BFS: distances, the cycle, and a same-id copy of the outage service;
+      - the decorator: 3 vs 2 impacted, P1 cap, P4 → P3, the int version unchanged.
+    - `IntelligenceIntegrationTest` (6 tests) covers the role rules and behaviour of every
+      new endpoint.
+  - curl against the running app:
+    - The service graph is seeded next to the existing services.
+    - A Network outage impacts 7 services: SSO@1, Monitoring@1, Email@2, LMS@2, ERP@2,
+      DNS@2, Payroll@3.
+    - A Network incident was raised from P3 to P2 with audit records.
+    - The duplicate check scored 0.82 for the admin, and the employee saw only
+      id/title/status.
+    - Recommendations came back with reasons.
+    - An admin SLA check at 80% of the response window recorded 1 risk, then 0 on the
+      second run. The incident then appears in `/at-risk`.
+    - Notifications reached the technician and the admin, and not the employee.
+    - Dependency add, duplicate add (400), remove and self-dependency (400) work, and
+      employees get 403.

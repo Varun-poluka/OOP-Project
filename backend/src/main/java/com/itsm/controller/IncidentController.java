@@ -2,7 +2,9 @@ package com.itsm.controller;
 
 import com.itsm.domain.IncidentStatus;
 import com.itsm.dto.*;
+import com.itsm.service.DuplicateService;
 import com.itsm.service.IncidentService;
+import com.itsm.service.RecommendationService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -20,9 +22,37 @@ import java.util.List;
 @RequestMapping("/api/incidents")
 public class IncidentController {
     private final IncidentService incidentService;
+    private final DuplicateService duplicateService;
+    private final RecommendationService recommendationService;
 
-    public IncidentController(IncidentService incidentService) {
+    public IncidentController(IncidentService incidentService, DuplicateService duplicateService,
+                              RecommendationService recommendationService) {
         this.incidentService = incidentService;
+        this.duplicateService = duplicateService;
+        this.recommendationService = recommendationService;
+    }
+
+    // Called by the report form before submitting; never stores anything.
+    @PostMapping("/duplicates/check")
+    public List<DuplicateCandidateResponse> checkDuplicates(@Valid @RequestBody DuplicateCheckRequest request,
+                                                            @AuthenticationPrincipal Jwt jwt) {
+        return duplicateService.check(request, jwt.getSubject());
+    }
+
+    // Literal paths like /at-risk win over the /{id} pattern, so this does not clash with get().
+    @GetMapping("/at-risk")
+    public List<IncidentResponse> atRisk(@AuthenticationPrincipal Jwt jwt) {
+        return incidentService.atRisk(jwt.getSubject());
+    }
+
+    @GetMapping("/{id}/recommendations")
+    public List<TechnicianRecommendationResponse> recommendations(@PathVariable String id) {
+        return recommendationService.recommend(id);
+    }
+
+    @GetMapping("/{id}/impact")
+    public ImpactResponse impact(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+        return incidentService.impact(id, jwt.getSubject());
     }
 
     @PostMapping

@@ -56,6 +56,19 @@ public class ITService {
         }
     }
 
+    public void removeDependency(ITService other){
+        if(other == null){
+            throw new NullPointerException("dependency cannot be null");
+        }
+        if(!dependencies.remove(other)){
+            throw new IllegalArgumentException(name + " does not depend on " + other.getName());
+        }
+    }
+
+    public boolean dependsOn(ITService other){
+        return dependencies.contains(other);
+    }
+
     public List<ITService> getDependencies(){
         return Collections.unmodifiableList(dependencies);
     }

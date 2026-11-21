@@ -30,3 +30,18 @@ Seeded by `DataSeeder` on first start. Every demo user has the password `passwor
 Log in with `POST /api/auth/login` and send the returned token as `Authorization: Bearer <token>`.
 The backend needs the `DB_PASSWORD` and `JWT_SECRET` (at least 32 bytes) environment variables, e.g.
 `export JWT_SECRET=$(openssl rand -base64 48)`.
+
+## Intelligent features (slice 3)
+| Endpoint | Who | What |
+|---|---|---|
+| `POST /api/incidents/duplicates/check` | Employee, Admin | Possible duplicates of a draft report (employees see id/title/status only) |
+| `GET /api/incidents/{id}/recommendations` | Admin | Top 3 technicians with a 0-100 score and reasons |
+| `GET /api/incidents/at-risk` | Technician (own), Admin | Incidents at SLA risk or breached, most urgent first |
+| `GET /api/incidents/{id}/impact` | Anyone who can view the incident | Services impacted by the incident's service |
+| `GET /api/services` | Any logged-in user | Services with direct dependencies and open incident counts |
+| `GET /api/services/{id}/impact` | Technician, Admin | Services impacted by an outage, with distance in hops |
+| `POST /api/services` | Admin | Create a service |
+| `POST` / `DELETE /api/services/{id}/dependencies/{dependsOnId}` | Admin | Add / remove a dependency |
+
+The create-incident response includes `possibleDuplicates`, and every incident response includes `riskLevel` and `slaPercentUsed`.
+

@@ -2,6 +2,7 @@ package com.itsm.domain;
 import com.itsm.domain.exception.UnauthorizedActionException;
 import jakarta.persistence.*;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -48,6 +49,14 @@ public class Incident {
     private LocalDateTime resolutionDueAt;
     private boolean responseBreached;
     private boolean resolutionBreached;
+    // "boolean default false" lets ddl-auto=update add these columns to a table that already has rows.
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean responseAtRisk;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean resolutionAtRisk;
+
+    // A running SLA clock is "at risk" once this share of its window has been used.
+    public static final double RISK_THRESHOLD = 0.75;
 
     protected Incident(){}
 
@@ -129,6 +138,45 @@ public class Incident {
             changed = true;
         }
         return changed;
+    }
+
+    // Leading indicator: warns before a breach. Like checkSla, each flag is set at most once.
+    public boolean checkSlaRisk(LocalDateTime now){
+        if (responseDueAt == null || resolutionDueAt == null) {
+            return false;
+        }
+        if (now == null) {
+            throw new NullPointerException("now is required");
+        }
+        boolean changed = false;
+        if(!responseAtRisk && !responseBreached && acknowledgedAt == null && windowUsed(responseDueAt, now) >= RISK_THRESHOLD){
+            responseAtRisk = true;
+            auditTrail.add(new AuditRecord(null, "SLA_RESPONSE_AT_RISK", null, null, "Response due by " + responseDueAt));
+            changed = true;
+        }
+        if(!resolutionAtRisk && !resolutionBreached && resolvedAt == null && windowUsed(resolutionDueAt, now) >= RISK_THRESHOLD){
+            resolutionAtRisk = true;
+            auditTrail.add(new AuditRecord(null, "SLA_RESOLUTION_AT_RISK", null, null, "Resolution due by " + resolutionDueAt));
+            changed = true;
+        }
+        return changed;
+    }
+
+    // Share of the window createdAt -> dueAt that has passed at 'now' (can exceed 1.0).
+    private double windowUsed(LocalDateTime dueAt, LocalDateTime now){
+        long window = Duration.between(createdAt, dueAt).toSeconds();
+        if (window <= 0) {
+            return 1.0;
+        }
+        return (double) Duration.between(createdAt, now).toSeconds() / window;
+    }
+
+    // An audit-only entry from the system (actor SYSTEM, no status change), e.g. PRIORITY_RAISED.
+    public void recordSystemEvent(String action, String description){
+        if (action == null || action.isBlank()) {
+            throw new IllegalArgumentException("action is required");
+        }
+        auditTrail.add(new AuditRecord(null, action, null, null, description));
     }
 
     // Test-only hook: the lifecycle always stamps LocalDateTime.now(), so unit tests use this
@@ -385,5 +433,12 @@ public class Incident {
     public boolean isResolutionBreached() {
         return resolutionBreached;
     }
-}
 
+    public boolean isResponseAtRisk() {
+        return responseAtRisk;
+    }
+
+    public boolean isResolutionAtRisk() {
+        return resolutionAtRisk;
+    }
+}

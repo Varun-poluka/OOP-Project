@@ -48,9 +48,14 @@ public class DataSeeder implements CommandLineRunner {
         }
         if(userRepository.count() > 0){
             backfillPasswordHashes();
-            System.out.println("DataSeeder: users already exist, skipping seed");
-            return;
+            System.out.println("DataSeeder: users already exist, skipping demo users and incident");
+        } else {
+            seedDemoData();
         }
+        seedServiceGraph();
+    }
+
+    private void seedDemoData(){
         String demoHash = passwordEncoder.encode(DEMO_PASSWORD);
 
         // Categories: save() returns the managed copy, so always keep the returned object
@@ -95,6 +100,41 @@ public class DataSeeder implements CommandLineRunner {
         technicianRepository.save(databaseTech);   // stores activeIncidents = 1
 
         System.out.println("DataSeeder: sample data loaded");
+    }
+
+    // A campus IT dependency graph. "A -> B" means A depends on B, so an outage of B impacts A.
+    // Runs on every start: it only creates missing services and missing edges, never deletes anything.
+    // DNS -> Monitoring -> Network -> DNS is a deliberate cycle (DNS failover is driven by monitoring),
+    // which proves the impact search terminates on cycles.
+    private void seedServiceGraph(){
+        ITService dns = findOrCreateService("DNS", 3);
+        ITService network = findOrCreateService("Network", 3);
+        ITService sso = findOrCreateService("SSO", 3);
+        ITService email = findOrCreateService("Email", 2);
+        ITService lms = findOrCreateService("LMS", 2);
+        ITService erp = findOrCreateService("ERP", 3);
+        ITService databaseCluster = findOrCreateService("Database Cluster", 3);
+        ITService payroll = findOrCreateService("Payroll", 2);
+        ITService paymentApp = findOrCreateService("Payment App", 3);
+        ITService monitoring = findOrCreateService("Monitoring", 1);
+
+        // addDependency ignores an edge that already exists. Changes to managed entities are
+        // saved when run()'s transaction commits.
+        network.addDependency(dns);
+        sso.addDependency(network);
+        email.addDependency(sso);
+        lms.addDependency(sso);
+        erp.addDependency(sso);
+        erp.addDependency(databaseCluster);
+        payroll.addDependency(erp);
+        paymentApp.addDependency(databaseCluster);
+        monitoring.addDependency(network);
+        dns.addDependency(monitoring);
+    }
+
+    private ITService findOrCreateService(String name, int businessCriticality){
+        return itServiceRepository.findByName(name)
+                .orElseGet(() -> itServiceRepository.save(new ITService(name, businessCriticality)));
     }
 
     // Users saved before login existed have placeholder hashes such as "hash-employee".

@@ -43,11 +43,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/error").permitAll()
                         // Reporting
-                        .requestMatchers(HttpMethod.POST, "/api/incidents").hasAnyRole("EMPLOYEE", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/incidents", "/api/incidents/duplicates/check")
+                                .hasAnyRole("EMPLOYEE", "ADMIN")
                         // Administrator only
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/classify", "/api/incidents/*/assign",
                                 "/api/incidents/*/reassign").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**", "/api/reports/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/*/recommendations").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/services", "/api/services/*/dependencies/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/services/*/dependencies/*").hasRole("ADMIN")
+                        // Technicians and admins (a technician only sees their own at-risk incidents)
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/at-risk", "/api/services/*/impact")
+                                .hasAnyRole("TECHNICIAN", "ADMIN")
                         // Technician work (the service and domain also check it is the assigned technician)
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/acknowledge", "/api/incidents/*/start",
                                 "/api/incidents/*/resolve").hasRole("TECHNICIAN")
@@ -56,7 +63,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/verify", "/api/incidents/*/reopen")
                                 .hasRole("EMPLOYEE")
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/close").hasAnyRole("EMPLOYEE", "ADMIN")
-                        // Everything else (reading incidents, notifications, /api/auth/me): any logged-in user
+                        // Everything else (reading incidents and their impact, the service list,
+                        // notifications, /api/auth/me): any logged-in user
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

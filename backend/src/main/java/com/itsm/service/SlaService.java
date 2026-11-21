@@ -4,6 +4,7 @@ import com.itsm.domain.IncidentStatus;
 import com.itsm.domain.Priority;
 import com.itsm.domain.SLAPolicy;
 import com.itsm.domain.exception.ResourceNotFoundException;
+import com.itsm.dto.SlaCheckResponse;
 import com.itsm.dto.SlaPolicyResponse;
 import com.itsm.repository.IncidentRepository;
 import com.itsm.repository.SLAPolicyRepository;
@@ -52,16 +53,21 @@ public class SlaService {
         return SlaPolicyResponse.from(policy);
     }
 
+    // Runs both checks on every unfinished incident: breaches (lagging) and risks (leading).
     @Transactional
-    public int checkAll(LocalDateTime now) {
+    public SlaCheckResponse checkAll(LocalDateTime now) {
         int breaches = 0;
+        int risks = 0;
         for (Incident incident : incidentRepository.findByStatusNotIn(FINISHED)) {
             int before = incident.getAuditTrail().size();
             if (incident.checkSla(now)) {
-                eventPublisher.publishNewEvents(incident, before);
                 breaches++;
             }
+            if (incident.checkSlaRisk(now)) {
+                risks++;
+            }
+            eventPublisher.publishNewEvents(incident, before); // publishes nothing if nothing changed
         }
-        return breaches;
+        return new SlaCheckResponse(now, breaches, risks);
     }
 }

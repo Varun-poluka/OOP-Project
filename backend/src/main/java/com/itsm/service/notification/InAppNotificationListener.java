@@ -30,6 +30,11 @@ public class InAppNotificationListener implements IncidentEventListener {
         if (NotificationRules.shouldNotifyTechnician(event)) {
             save(event.technicianId(), event);
         }
+        if (NotificationRules.shouldNotifyAdmins(event)) {
+            for (User admin : userRepository.findAdministrators()) {
+                notificationRepository.save(new Notification(admin, event.incidentId(), NotificationRules.message(event)));
+            }
+        }
     }
 
     private void save(String userId, IncidentEvent event) {

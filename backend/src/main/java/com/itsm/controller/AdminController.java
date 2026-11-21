@@ -42,8 +42,7 @@ public class AdminController {
             @RequestParam(name = "at", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime at) {
         LocalDateTime checkedAt = (at == null) ? LocalDateTime.now() : at;
-        int breaches = slaService.checkAll(checkedAt);
-        return new SlaCheckResponse(checkedAt, breaches);
+        return slaService.checkAll(checkedAt);
     }
 
     @GetMapping("/sla/policies")
