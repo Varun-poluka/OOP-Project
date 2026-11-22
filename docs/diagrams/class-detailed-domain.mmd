@@ -1,0 +1,161 @@
+---
+title: "I-ITSM detailed class diagram (1 of 2): domain model, com.itsm.domain"
+---
+classDiagram
+    direction TB
+
+    class User {
+        <<abstract>>
+        -String id
+        -String name
+        -String email
+        -String passwordHash
+        -boolean active
+        +getRole()* String
+        +setName(String)
+        +setEmail(String)
+        +changePasswordHash(String)
+        +isActive() boolean
+        +deactivate()
+        +reactivate()
+    }
+    class Employee {
+        +getRole() String
+    }
+    class Administrator {
+        +getRole() String
+    }
+    class Technician {
+        -int maxWorkload
+        -int activeIncidents
+        -boolean available
+        +addSkill(Category)
+        +replaceSkills(Set~Category~)
+        +hasSkill(Category) boolean
+        +canTakeMoreWork() boolean
+        +changeMaxWorkload(int)
+        +setAvailable(boolean)
+        ~addIncident()
+        ~removeIncident()
+    }
+
+    class Incident {
+        -String id
+        -String title
+        -String description
+        -Impact impact
+        -Urgency urgency
+        -Priority priority
+        -IncidentStatus status
+        -String resolutionDetails
+        -LocalDateTime createdAt / acknowledgedAt / resolvedAt / closedAt
+        -LocalDateTime responseDueAt / resolutionDueAt
+        -boolean responseBreached / resolutionBreached
+        -boolean responseAtRisk / resolutionAtRisk
+        -String pendingInfoRequest
+        -Integer feedbackRating
+        -String feedbackComment
+        +classify(Priority, User)
+        +assignTo(Technician, User)
+        +acknowledge(Technician)
+        +startWork(Technician)
+        +addNote(Technician, String)
+        +requestInfo(Technician, String)
+        +addReporterComment(Employee, String)
+        +resolve(Technician, String)
+        +verify(Employee, Integer rating, String comment)
+        +close(User)
+        +reopen(Employee, String)
+        +reassign(Technician, User)
+        +startSla(SLAPolicy)
+        +checkSla(LocalDateTime) boolean
+        +checkSlaRisk(LocalDateTime) boolean
+        +isInfoRequested() boolean
+    }
+
+    class AuditRecord {
+        -Long id
+        -LocalDateTime timestamp
+        -String action
+        -IncidentStatus previousStatus
+        -IncidentStatus newStatus
+        -String description
+        -String incidentId
+    }
+    class InvestigationNote {
+        -Long id
+        -String text
+        -LocalDateTime createdAt
+        +isFromReporter() boolean
+    }
+    class Category {
+        -String name
+        -String description
+    }
+    class ITService {
+        -Long id
+        -String name
+        -int businessCriticality
+        +addDependency(ITService)
+        +removeDependency(ITService)
+        +dependsOn(ITService) boolean
+    }
+    class SLAPolicy {
+        -Priority priority
+        -int responseMinutes
+        -int resolutionMinutes
+        +update(int, int)
+    }
+    class Notification {
+        -Long id
+        -String incidentId
+        -String message
+        -boolean read
+        -LocalDateTime createdAt
+        +markAsRead()
+    }
+
+    class Priority {
+        <<enumeration>>
+        P1
+        P2
+        P3
+        P4
+    }
+    class IncidentStatus {
+        <<enumeration>>
+        NEW
+        CLASSIFIED
+        ASSIGNED
+        ACKNOWLEDGED
+        IN_PROGRESS
+        RESOLVED
+        VERIFIED
+        CLOSED
+    }
+
+    %% Inheritance: one users table, the "role" column says which subclass.
+    User <|-- Employee
+    User <|-- Technician
+    User <|-- Administrator
+
+    %% Composition: notes and audit records are created by the incident and live and die with it.
+    Incident "1" *-- "0..*" AuditRecord : auditTrail
+    Incident "1" *-- "0..*" InvestigationNote : notes
+
+    %% Associations with multiplicities.
+    Incident "0..*" --> "1" Employee : reporter
+    Incident "0..*" --> "0..1" Technician : assignedTechnician
+    Incident "0..*" --> "1" Category : category
+    Incident "0..*" --> "1" ITService : affectedService
+    Technician "0..*" --> "0..*" Category : skills
+    AuditRecord "0..*" --> "0..1" User : actor (null = SYSTEM)
+    InvestigationNote "0..*" --> "1" User : author
+    Notification "0..*" --> "1" User : recipient
+    SLAPolicy "1" ..> "1" Priority : one policy per priority
+    Incident ..> SLAPolicy : startSla uses
+    Incident ..> IncidentStatus
+    Incident ..> Priority
+
+    %% Aggregation: a service refers to services it depends on, which exist on their own.
+    ITService "0..*" o-- "0..*" ITService : dependencies

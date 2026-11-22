@@ -691,3 +691,31 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - `GET /api/admin/audit?incidentId=INC-0022` → newest first (`INFO_PROVIDED`, `INFO_REQUESTED`, …);
       `action=FEEDBACK_GIVEN` → 7 demo records; `size=500` → 400.
     - `GET /api/reports/summary` → `averageRating 4.3, ratingCount 7`.
+
+---
+
+### 2026-11-22: Slice 7 (diagrams) · Use-case and detailed class diagrams
+
+- **What was built:** `docs/diagrams/use-case.mmd`, `class-detailed-domain.mmd` and
+  `class-detailed-patterns.mmd` (sources, with SVGs next to them), rendered as PNGs into
+  `report/figures/diagrams/`.
+- **Why:** the report needs a use-case diagram covering every role in the project statement
+  (including this slice's new use cases) and a class diagram detailed enough to show attributes,
+  methods, multiplicities, composition and aggregation.
+- **Key concepts:**
+  - **Use-case diagram in Mermaid:** Mermaid has no use-case diagram type, and PlantUML was not
+    available here. So it is a flowchart in UML style: stadium shapes are use cases, the large box
+    is the system boundary, and dotted arrows are «include» (always part of the base use case, e.g.
+    reporting always calculates a priority) or «extend» (optional, e.g. giving feedback extends
+    verifying). Actors on the left draw edges *to* their use cases and actors on the right *from*
+    them, which is how Mermaid's layout puts them on different sides.
+  - **Composition vs aggregation:** `Incident *-- AuditRecord` (filled diamond) means the records
+    belong to the incident and are created and removed with it (`cascade = ALL, orphanRemoval`).
+    `ITService o-- ITService` (hollow diamond) means a service refers to other services that exist
+    on their own.
+  - **Why two class images:** one diagram with all ~35 classes was too small to read when printed.
+    The domain model and the pattern hierarchies are separate concerns, so each gets its own page.
+    `IncidentState` is an abstract class in the code (not an interface), and the diagram marks it
+    «abstract».
+  - **Resolution:** `mmdc --size 4000` renders the longest side at 4000 px; `-s 2` alone was capped
+    by the default 800 px page width.

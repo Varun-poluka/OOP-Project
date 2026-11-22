@@ -1,0 +1,123 @@
+---
+title: "I-ITSM detailed class diagram (2 of 2): State, Strategy, Decorator and Observer"
+---
+classDiagram
+    direction TB
+
+    class Incident {
+        -IncidentStatus status
+        -state() IncidentState
+        ~applyClassify(..) / applyAssign(..) / applyResolve(..) ...
+    }
+
+    %% ---- State ----
+    class IncidentState {
+        <<abstract>>
+        ~getStatus()* IncidentStatus
+        ~classify(Incident, Priority, User)
+        ~assign(Incident, Technician, User)
+        ~acknowledge(Incident, Technician)
+        ~startWork(Incident, Technician)
+        ~addNote(Incident, Technician, String)
+        ~addReporterComment(Incident, Employee, String)
+        ~requestInfo(Incident, Technician, String)
+        ~resolve(Incident, Technician, String)
+        ~verify(Incident, Employee, Integer, String)
+        ~close(Incident, User)
+        ~reopen(Incident, Employee, String)
+        ~reassign(Incident, Technician, User)
+        #refuse(IncidentStatus) InvalidStateTransitionException
+    }
+    class IncidentStates {
+        <<utility>>
+        +of(IncidentStatus)$ IncidentState
+    }
+    class NewState
+    class ClassifiedState
+    class AssignedState
+    class AcknowledgedState
+    class InProgressState
+    class ResolvedState
+    class VerifiedState
+    class ClosedState
+
+    Incident ..> IncidentStates : state()
+    IncidentStates --> "8" IncidentState : one shared instance per status (stateless)
+    IncidentState <|-- NewState
+    IncidentState <|-- ClassifiedState
+    IncidentState <|-- AssignedState
+    IncidentState <|-- AcknowledgedState
+    IncidentState <|-- InProgressState
+    IncidentState <|-- ResolvedState
+    IncidentState <|-- VerifiedState
+    IncidentState <|-- ClosedState
+
+    %% ---- Strategy + Decorator: priority ----
+    class PriorityCalculator {
+        <<interface>>
+        +calculate(Impact, Urgency, int) Priority
+        +calculate(Impact, Urgency, ITService) Priority
+    }
+    class WeightedPriorityCalculator {
+        +calculate(Impact, Urgency, int) Priority
+    }
+    class DependencyAwarePriorityCalculator {
+        -PriorityCalculator inner
+        -ServiceImpactAnalyzer analyzer
+        -Supplier allServices
+        +calculate(Impact, Urgency, ITService) Priority
+    }
+    PriorityCalculator <|.. WeightedPriorityCalculator
+    PriorityCalculator <|.. DependencyAwarePriorityCalculator
+    DependencyAwarePriorityCalculator o-- "1" PriorityCalculator : decorates
+
+    %% ---- Strategy: assignment ----
+    class AssignmentStrategy {
+        <<interface>>
+        +getName() String
+        +selectTechnician(Incident, List~Technician~) Optional~Technician~
+    }
+    class SkillBasedAssignmentStrategy
+    class LoadBasedAssignmentStrategy
+    class AssignmentStrategySelector {
+        -Map~String, AssignmentStrategy~ strategies
+        -AssignmentStrategy current
+        +getCurrent() AssignmentStrategy
+        +setCurrent(String)
+        +getAvailable() Set~String~
+    }
+    AssignmentStrategy <|.. SkillBasedAssignmentStrategy
+    AssignmentStrategy <|.. LoadBasedAssignmentStrategy
+    AssignmentStrategySelector o-- "1..*" AssignmentStrategy : available
+
+    %% ---- Strategy: duplicate detection ----
+    class DuplicateDetector {
+        <<interface>>
+        +findDuplicates(IncidentText, List~Incident~, LocalDateTime) List~DuplicateMatch~
+    }
+    class TokenSimilarityDuplicateDetector
+    DuplicateDetector <|.. TokenSimilarityDuplicateDetector
+
+    %% ---- Observer ----
+    class IncidentEventListener {
+        <<interface>>
+        +onIncidentEvent(IncidentEvent)
+    }
+    class IncidentEventPublisher {
+        -List~IncidentEventListener~ listeners
+        +publish(IncidentEvent)
+        +publishNewEvents(Incident, int)
+    }
+    class IncidentEvent {
+        <<record>>
+        incidentId, action, previousStatus, newStatus
+        actorId, reporterId, technicianId, timestamp
+    }
+    class InAppNotificationListener
+    class EmailNotificationListener
+    class LiveUpdateListener
+    IncidentEventPublisher o-- "0..*" IncidentEventListener : notifies
+    IncidentEventPublisher ..> IncidentEvent : creates from AuditRecord
+    IncidentEventListener <|.. InAppNotificationListener
+    IncidentEventListener <|.. EmailNotificationListener
+    IncidentEventListener <|.. LiveUpdateListener

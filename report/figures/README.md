@@ -13,6 +13,9 @@ deviceScaleFactor 2, in light mode unless the caption says otherwise. Demo login
 | `er-diagram.png` | Entity-relationship diagram of the database schema. |
 | `incident-states.png` | State diagram of the incident lifecycle. |
 | `sequence-report-incident.png` | Sequence diagram of an employee reporting an incident. |
+| `use-case.png` | Use-case diagram: Employee, Technician, Administrator and System/Scheduler with every use case from the project statement; green ones were added in v1.1; dotted arrows are «include» / «extend». Drawn as a Mermaid flowchart in UML use-case style. |
+| `class-detailed-domain.png` | Detailed class diagram (1 of 2): domain classes with attributes and methods, the User hierarchy, associations with multiplicities, composition (Incident with AuditRecord and InvestigationNote) and aggregation (ITService dependencies). |
+| `class-detailed-patterns.png` | Detailed class diagram (2 of 2): the pattern types (IncidentState and its eight states, PriorityCalculator with its decorator, AssignmentStrategy, DuplicateDetector, IncidentEventListener with the publisher) and their implementations. |
 
 ## screens/
 

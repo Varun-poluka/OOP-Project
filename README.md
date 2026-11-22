@@ -180,8 +180,11 @@ Errors are returned as `application/problem+json`; a refused lifecycle action, a
 ## Documentation
 - Diagrams: [class](docs/diagrams/class-domain.svg), [incident states](docs/diagrams/incident-states.svg),
   [report sequence](docs/diagrams/sequence-report-incident.svg),
-  [architecture](docs/diagrams/architecture.svg), [ER](docs/diagrams/er-diagram.svg).
-  Re-render after editing a `.mmd` file with `npx @mermaid-js/mermaid-cli -i <file>.mmd -o <file>.svg`.
+  [architecture](docs/diagrams/architecture.svg), [ER](docs/diagrams/er-diagram.svg),
+  [use cases](docs/diagrams/use-case.svg), detailed class diagrams
+  ([domain](docs/diagrams/class-detailed-domain.svg), [patterns](docs/diagrams/class-detailed-patterns.svg)).
+  Re-render after editing a `.mmd` file with `npx @mermaid-js/mermaid-cli -i <file>.mmd -o <file>.svg`
+  (report PNGs: `-o ../../report/figures/diagrams/<file>.png --size 4000`).
 - [Design patterns and SOLID](docs/patterns.md)
 - [Decisions](docs/decisions.md), [backend learning log](docs/learning-log.md),
   [frontend learning log](docs/learning-log-frontend.md)

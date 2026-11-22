@@ -1,0 +1,94 @@
+---
+title: "I-ITSM use cases (v1.1). Green = added in v1.1; dotted = «include» / «extend»"
+---
+%% Mermaid has no use-case diagram type, so this is a flowchart drawn in UML use-case style:
+%% stadium shapes = use cases, the large box = system boundary, dotted arrows = include / extend.
+flowchart LR
+    EMP["«actor»<br/><b>Employee</b>"]:::actor
+    TEC["«actor»<br/><b>Technician</b>"]:::actor
+    ADM["«actor»<br/><b>Administrator</b>"]:::actor
+    SYS["«actor»<br/><b>System / Scheduler</b>"]:::actor
+
+    subgraph ITSM["I-ITSM Service Desk"]
+        direction LR
+        subgraph E[" "]
+            direction TB
+            E1([Register account]):::new
+            E2([Report incident])
+            E3([Track own incidents and SLA])
+            E4([Add information to incident]):::new
+            E5([Answer information request]):::new
+            E6([Verify resolution])
+            E7([Give feedback: rating and comment]):::new
+            E8([Reopen incident])
+            E9([Close incident])
+        end
+        subgraph U["All users"]
+            direction TB
+            E0([Log in])
+            E10([Read notifications])
+        end
+        subgraph T[" "]
+            direction TB
+            T1([View work queue and own workload])
+            T2([View at-risk incidents])
+            T3([Acknowledge incident])
+            T4([Start work])
+            T5([Add investigation note])
+            T6([Request additional information]):::new
+            T7([Resolve incident])
+            T8([View service impact])
+        end
+        subgraph A[" "]
+            direction TB
+            A1([Classify incident])
+            A2([Assign / reassign technician])
+            A3([View technician recommendations])
+            A4([Search incidents])
+            A5([View dashboard and reports])
+            A6([Manage SLA policies])
+            A7([Change assignment strategy])
+            A8([Manage services and dependencies])
+            A9([Manage users]):::new
+            A10([Edit technicians]):::new
+            A11([Manage categories]):::new
+            A12([View audit log]):::new
+        end
+        subgraph S[" "]
+            direction TB
+            S1([Detect possible duplicates])
+            S2([Calculate priority])
+            S3([Auto-assign technician])
+            S4([Check SLAs every minute])
+            S5([Send notifications])
+            S6([Push live updates])
+            S7([Record audit trail])
+        end
+    end
+
+    %% Edges point from left-hand actors to use cases and from use cases to right-hand actors,
+    %% so Employee and Technician are drawn on the left, Administrator and System on the right.
+    EMP --- E1 & E2 & E3 & E4 & E6 & E8 & E9 & E0 & E10
+    TEC --- T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 & E0 & E10
+    A1 & A2 & A4 & A5 & A6 & A7 & A8 & A9 & A10 & A11 & A12 & E0 & E10 & E2 & E9 --- ADM
+    S4 & S5 & S6 --- SYS
+
+    E2 -. "«include»" .-> S1
+    E2 -. "«include»" .-> S2
+    E2 -. "«include»" .-> S3
+    E5 -. "«extend»" .-> E4
+    E7 -. "«extend»" .-> E6
+    A3 -. "«extend»" .-> A2
+    S4 -. "«include»" .-> S5
+    T6 -. "«include»" .-> S5
+    S5 -. "«include»" .-> S6
+    E2 -. "«include»" .-> S7
+
+    classDef actor fill:#ffffff,stroke:#1f2937,stroke-width:2px,color:#111827
+    classDef new fill:#e6f4f1,stroke:#0f766e,stroke-width:2px,color:#0f3d38
+    style ITSM fill:#f8fafc,stroke:#334155,stroke-width:2px
+    style E fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 3
+    style T fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 3
+    style A fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 3
+    style U fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 3
+    style S fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 3
