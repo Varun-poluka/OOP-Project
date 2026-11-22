@@ -1,4 +1,4 @@
-import type { DuplicateCheckRequest, IncidentSearchCriteria } from './types'
+import type { AuditLogCriteria, DuplicateCheckRequest, IncidentSearchCriteria } from './types'
 import type { PageRequest } from './incidents'
 
 // Every TanStack Query cache key in one place. Keys are arrays; invalidating a prefix
@@ -25,5 +25,9 @@ export const queryKeys = {
   slaPolicies: () => ['admin', 'sla-policies'] as const,
   strategy: () => ['admin', 'strategy'] as const,
   technicians: () => ['technicians'] as const,
+  // Under ['technicians'], so refreshing the technician list also refreshes "me".
+  technicianMe: () => ['technicians', 'me'] as const,
+  users: () => ['admin', 'users'] as const,
+  audit: (criteria: AuditLogCriteria, page: number) => ['admin', 'audit', criteria, page] as const,
   categories: () => ['categories'] as const,
 }

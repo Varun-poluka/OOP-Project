@@ -102,6 +102,9 @@ export type Kpis = {
   resolutionCompliance: number | null
   meanMinutesToAcknowledge: number | null
   meanMinutesToResolve: number | null
+  /** Mean reporter rating (1-5) in the range, and how many incidents were rated. */
+  averageRating: number | null
+  ratingCount: number
 }
 
 export function kpis(summary: ReportSummary): Kpis {
@@ -112,7 +115,15 @@ export function kpis(summary: ReportSummary): Kpis {
     resolutionCompliance: summary.overall.resolutionCompliance,
     meanMinutesToAcknowledge: summary.overall.meanMinutesToAcknowledge,
     meanMinutesToResolve: summary.overall.meanMinutesToResolve,
+    averageRating: summary.averageRating,
+    ratingCount: summary.ratingCount,
   }
+}
+
+/** The mean feedback rating as "4.3 / 5"; null (nobody rated) is "No data". */
+export function formatRating(value: number | null): string {
+  if (value === null) return NO_DATA
+  return `${value.toFixed(1)} / 5`
 }
 
 export const NO_DATA = 'No data'

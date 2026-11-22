@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ListTodo } from 'lucide-react'
 import { incidentsApi } from '@/api/incidents'
 import { queryKeys } from '@/api/queryKeys'
-import type { IncidentResponse, UserResponse } from '@/api/types'
+import { techniciansApi } from '@/api/technicians'
+import type { IncidentResponse, TechnicianResponse, UserResponse } from '@/api/types'
 import { useAuth } from '@/auth/useAuth'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
@@ -14,6 +15,7 @@ import { QueryState } from '@/components/QueryState'
 import { RiskBadge } from '@/components/RiskBadge'
 import { StatusBadge } from '@/components/StatusBadge'
 import { UrgentClockBadge } from '@/components/UrgentClockBadge'
+import { WorkloadBar } from '@/components/WorkloadBar'
 import { Button } from '@/components/ui/button'
 import { ACTION_META } from '@/features/incident/actionMeta'
 import { availableActions } from '@/features/incident/actions'
@@ -35,6 +37,14 @@ export function MyQueuePage() {
     refetchInterval: usePollWhileOffline(),
   })
 
+  // Own workload for the header. Live incident events and this user's own actions invalidate it
+  // (eventToInvalidations, useIncidentAction), because each assignment or resolve moves the count.
+  const me = useQuery({
+    queryKey: queryKeys.technicianMe(),
+    queryFn: techniciansApi.me,
+    refetchInterval: usePollWhileOffline(),
+  })
+
   // RequireAuth renders us only when logged in.
   if (user === null) return null
 
@@ -48,6 +58,7 @@ export function MyQueuePage() {
             ? `${queue.data.length} unfinished, most urgent SLA first.`
             : 'Incidents assigned to you, most urgent SLA first.'
         }
+        actions={me.isSuccess ? <MyWorkload tech={me.data} /> : undefined}
       />
 
       <QueryState
@@ -87,6 +98,19 @@ export function MyQueuePage() {
           </div>
         )}
       </QueryState>
+    </div>
+  )
+}
+
+/** "My workload": how many of the technician's slots are in use, and whether they are on leave. */
+function MyWorkload({ tech }: { tech: TechnicianResponse }) {
+  return (
+    <div className="w-56 rounded-md border bg-card px-3 py-2">
+      <p className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
+        <span>My workload</span>
+        {!tech.available && <span className="font-medium text-foreground">On leave</span>}
+      </p>
+      <WorkloadBar tech={tech} label="My workload" />
     </div>
   )
 }

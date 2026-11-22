@@ -6,6 +6,7 @@ import {
   complianceBars,
   formatMinutes,
   formatPercent,
+  formatRating,
   kpis,
   priorityBars,
   statusBars,
@@ -33,6 +34,8 @@ function summary(overrides: Partial<ReportSummary> = {}): ReportSummary {
     technicians: [],
     openIncidents: 0,
     openByPriority: { P1: 0, P2: 0, P3: 0, P4: 0 },
+    averageRating: null,
+    ratingCount: 0,
     ...overrides,
   }
 }
@@ -137,5 +140,19 @@ describe('kpis and formatting', () => {
     expect(formatPercent(92.456)).toBe('92.5%')
     expect(formatMinutes(85)).toBe('1h 25m')
     expect(formatMinutes(0.5)).toBe('<1m')
+  })
+})
+
+describe('formatRating', () => {
+  it('shows the mean out of 5, and No data when nobody rated', () => {
+    expect(formatRating(null)).toBe(NO_DATA)
+    expect(formatRating(4.3)).toBe('4.3 / 5')
+    expect(formatRating(5)).toBe('5.0 / 5')
+  })
+
+  it('kpis passes the rating and how many incidents were rated', () => {
+    const values = kpis(summary({ averageRating: 4.3, ratingCount: 7 }))
+    expect(values.averageRating).toBe(4.3)
+    expect(values.ratingCount).toBe(7)
   })
 })

@@ -5,11 +5,14 @@ import {
   Gauge,
   ListChecks,
   ListTodo,
+  ScrollText,
   Search,
   Server,
   Shuffle,
+  Tags,
   Timer,
   TriangleAlert,
+  UserCog,
   Users,
 } from 'lucide-react'
 import type { Role } from '@/api/types'
@@ -37,6 +40,9 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Assignment strategy', to: '/admin/strategy', icon: Shuffle },
     { label: 'Services', to: '/admin/services', icon: Server },
     { label: 'Technicians', to: '/admin/technicians', icon: Users },
+    { label: 'Users', to: '/admin/users', icon: UserCog },
+    { label: 'Categories', to: '/admin/categories', icon: Tags },
+    { label: 'Audit log', to: '/admin/audit', icon: ScrollText },
   ],
 }
 

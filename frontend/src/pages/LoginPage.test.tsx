@@ -10,7 +10,7 @@ import { readSession, saveSession } from '@/auth/session'
 import { routes } from '@/router'
 
 // Replace the real login request with a fake we control in each test.
-vi.mock('@/api/auth', () => ({ login: vi.fn() }))
+vi.mock('@/api/auth', () => ({ login: vi.fn(), register: vi.fn() }))
 const loginMock = vi.mocked(login)
 
 function loginResponse(role: Role): LoginResponse {
@@ -73,8 +73,17 @@ describe('role redirect after login', () => {
 
     await signIn()
 
-    expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
+    // The page is lazy-loaded: on a busy machine the Dashboard chunk (recharts) can take longer
+    // than findByRole's default 1 s to arrive, which made this test flaky. 5 s is ample.
+    expect(await screen.findByRole('heading', { level: 1, name: heading }, { timeout: 5000 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe(path)
+  })
+
+  it('links to the register page', async () => {
+    const router = renderApp('/login')
+    await userEvent.setup().click(screen.getByRole('link', { name: 'Register' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Create an account' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/register')
   })
 
   it('returns to the page that required login when the role may see it', async () => {

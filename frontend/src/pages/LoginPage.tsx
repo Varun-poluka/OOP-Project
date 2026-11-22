@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { ArrowRight, Info, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -121,6 +121,14 @@ export function LoginPage() {
               {!submitting && <ArrowRight />}
             </Button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            New here?{' '}
+            <Link to="/register" className="font-medium text-foreground underline underline-offset-4">
+              Register
+            </Link>{' '}
+            to report incidents.
+          </p>
         </div>
       </div>
     </div>
@@ -139,8 +147,8 @@ const STEP_ACTOR: Record<IncidentStatus, string> = {
   CLOSED: 'Employee / Admin',
 }
 
-/** Left panel (desktop only): the incident lifecycle, set like a departures board. */
-function LifecyclePanel() {
+/** Left panel (desktop only): the incident lifecycle, set like a departures board. Also used by RegisterPage. */
+export function LifecyclePanel() {
   return (
     <aside className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-10 text-sidebar-foreground lg:flex">
       {/* faint grid, like graph paper on an operations wall */}

@@ -16,6 +16,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { ActionBar } from '@/features/incident/ActionBar'
 import { AuditTimeline } from '@/features/incident/AuditTimeline'
+import { FeedbackPanel } from '@/features/incident/FeedbackPanel'
+import { InfoRequestBanner } from '@/features/incident/InfoRequestBanner'
 import { ImpactPanel } from '@/features/incident/ImpactPanel'
 import { NotesSection } from '@/features/incident/NotesSection'
 import { Panel } from '@/features/incident/Panel'
@@ -109,6 +111,8 @@ function IncidentView({ incident, back }: { incident: IncidentResponse; back: Re
         <ActionBar incident={incident} actions={actions} pending={action.isPending} run={run} />
       </header>
 
+      <InfoRequestBanner incident={incident} isReporter={user !== null && user.id === incident.reporterId} />
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
           {incident.resolutionDetails !== null && incident.resolutionDetails.length > 0 && (
@@ -116,6 +120,7 @@ function IncidentView({ incident, back }: { incident: IncidentResponse; back: Re
               <p className="text-sm whitespace-pre-wrap">{incident.resolutionDetails}</p>
             </Panel>
           )}
+          <FeedbackPanel incident={incident} />
           <Panel title="Description">
             {incident.description !== null && incident.description.trim().length > 0 ? (
               <p className="text-sm whitespace-pre-wrap">{incident.description}</p>
@@ -123,7 +128,13 @@ function IncidentView({ incident, back }: { incident: IncidentResponse; back: Re
               <p className="text-sm text-muted-foreground">No description given.</p>
             )}
           </Panel>
-          <NotesSection incident={incident} canAdd={actions.includes('addNote')} pending={action.isPending} run={run} />
+          <NotesSection
+            incident={incident}
+            canAdd={actions.includes('addNote')}
+            canComment={actions.includes('comment')}
+            pending={action.isPending}
+            run={run}
+          />
           <AuditTimeline records={incident.auditTrail} />
         </div>
 

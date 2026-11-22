@@ -734,3 +734,102 @@ frontend and backend work can happen in parallel without editing the same file.
   - Seen but not changed: history details such as "Not resolved by
     2026-11-21T19:50:49" show a raw timestamp. That text comes from the backend's audit
     message, so changing it is a backend slice.
+
+---
+
+### 2026-11-22: Frontend slice F6 · Register, reporter conversation, feedback, workload, admin users / categories / audit
+
+- **What was built:**
+  - **Register** page (`/register`, public) with a link from the login page. It creates an employee
+    account and then signs the new user in.
+  - **Incident detail:**
+    - Notes and the reporter's comments in one thread; reporter entries are tinted and labelled
+      "Reporter".
+    - The reporter gets an "Add information" box while the incident is unfinished.
+    - The technician gets an **Ask reporter** action. The reporter then sees a highlighted
+      **Information requested** banner with a link to the answer box; everyone else sees a quiet
+      "Waiting for … to answer" line.
+    - **Confirm it works** now has an optional 1-5 star rating and comment. A **Reporter feedback**
+      panel shows what was given.
+  - **My queue:** a "My workload" box in the header (active / max, "Full", "On leave").
+  - **Dashboard:** an "Average rating" tile.
+  - **New admin pages:**
+    - **Users:** role filter, New user dialog, deactivate / reactivate; your own row is disabled.
+    - **Categories:** list and New category dialog.
+    - **Audit log:** filters for incident, user, action and dates, with paging.
+    - **Technicians:** an Edit dialog for skills, on leave and max workload.
+  - Fixed the flaky LoginPage test ("sends ADMIN to /admin").
+- **Why:** the remaining MVP use cases from the project statement, in the UI (the backend slice
+  added the endpoints).
+- **Files:**
+  - `api/`:
+    - `types.ts`: new fields (`fromReporter`, `pendingInfoRequest`, feedback, `averageRating`,
+      `active`) and request types.
+    - `auth.ts`: `register`. `incidents.ts`: `addComment`, `requestInfo`, `verify(id, feedback)`.
+    - `admin.ts`: users, technicians, categories, audit. `technicians.ts`: `me`.
+    - `queryKeys.ts`: `users`, `audit`, `technicianMe`.
+    - `useReferenceData.ts`: categories now use the normal 30 s staleTime.
+  - `features/incident/`:
+    - `actions.ts`: `comment` for the reporter (NEW to IN_PROGRESS) and `requestInfo` for the assigned
+      technician (ACKNOWLEDGED, IN_PROGRESS, hidden while a question is open).
+    - `actionMeta.ts`, `ActionBar.tsx`, `useIncidentAction.ts`: wire those actions up.
+    - `feedback.ts`, `FeedbackFields.tsx`, `FeedbackPanel.tsx`, `InfoRequestBanner.tsx` (new);
+      `NotesSection.tsx`: the thread.
+  - `features/register/registerSchema.ts`.
+  - `features/admin/`:
+    - `userSchema.ts`, `CreateUserDialog.tsx`: the New user form.
+    - `technicianForm.ts`, `TechnicianEditDialog.tsx`: the technician edit.
+    - `categorySchema.ts`: the category form.
+    - `auditFilters.ts`: audit log filters (all new).
+  - `pages/`: `RegisterPage.tsx`, `admin/UsersPage.tsx`, `admin/CategoriesPage.tsx` and
+    `admin/AuditLogPage.tsx` (new). Changed: `LoginPage.tsx` (link; `LifecyclePanel` exported),
+    `admin/TechniciansPage.tsx`, `admin/DashboardPage.tsx`, `technician/MyQueuePage.tsx`,
+    `shared/IncidentDetailPage.tsx`.
+  - `components/FormDialog.tsx` (moved out of ServicesPage) and `components/WorkloadBar.tsx` (moved out
+    of TechniciansPage); `lib/labels.ts`: `humaniseAction` (moved out of AuditTimeline). Each is now
+    shared by two pages.
+  - `router.tsx`, `lazyPages.ts`, `layout/nav.ts`: the new routes and sidebar entries.
+  - `live/eventToInvalidations.ts`: a live incident event also refreshes the technician's workload.
+- **Key concepts:**
+  - **One rule table for the buttons:** the page still asks `availableActions()` which actions the
+    user has. The reporter's comment box and the technician's Ask button come from the same table,
+    so the UI cannot offer something the backend would refuse (and the backend still checks).
+  - **A flag shown as a banner, not a status:** `pendingInfoRequest` is not a lifecycle state, so the
+    status badge does not change. The banner reads the flag. The reporter's next comment clears it
+    on the server, and the returned incident replaces the cached one, so the banner disappears.
+  - **zod `refine` / `superRefine`:** checks that need two fields at once. "Passwords match" uses
+    `refine` with `path: ['confirmPassword']`, so the message appears under that field. "A technician
+    needs a max workload" uses `superRefine`, which can add an issue to one field depending on
+    another (the role).
+  - **A 409 shown where it belongs:** a duplicate email or category comes back as 409. The form puts
+    "already exists" under the email or name field with `setError`, instead of a general error box.
+  - **Radio group for stars:** each star is a `role="radio"` button with a name ("4 stars, Very
+    good") inside a `role="radiogroup"`, so screen readers and keyboard users can choose a rating.
+    Clicking the chosen star again clears it, because feedback is optional.
+  - **Lazy-loading the register page:** importing it normally pulled react-hook-form and zod into the
+    bundle everyone downloads (main bundle 480 → 609 kB, and the 500 kB warning came back). As a
+    lazy page with its own `<Suspense>` (it lives outside the app shell), the main bundle is
+    425.84 kB and the register page is a 3.41 kB chunk.
+  - **Why the flaky test failed:** "sends ADMIN to /admin" waits for the Dashboard heading. The
+    Dashboard is lazy and brings Recharts, so on a busy machine its file sometimes took longer than
+    `findByRole`'s default 1 s timeout. The test now waits up to 5 s; it is not slower when the
+    page is quick.
+- **How it was tested:**
+  - `npm test`: 30 files, 263 tests (was 25 files, 231). New: `RegisterPage.test.tsx`,
+    `registerSchema.test.ts`, `ActionBar.test.tsx` (verify with and without feedback, Ask reporter),
+    `adminForms.test.tsx` (New user, New category, technician edit, their schemas),
+    `auditFilters.test.ts`; plus new cases in `actions.test.ts`, `reportCharts.test.ts`,
+    `eventToInvalidations.test.ts` and `LoginPage.test.tsx` (Register link).
+  - `npm run build` and `npm run lint`: clean, no chunk-size warning.
+  - Playwright against a second Vite server (5174 → backend 8081, scratch database):
+    - Register Tanvi Rao → lands on My incidents; the same email again → "already exists" under the
+      email field.
+    - Kiran's queue header shows 4 / 8. Kiran asks a question on INC-0032; the Ask button then
+      disappears, and Asha sees the Information requested banner.
+    - Asha verifies INC-0024 with 5 stars and a comment → Reporter feedback "5/5 · Excellent".
+    - Dashboard "Average rating 4.4 / 5, 8 ratings in range".
+    - Admin: Users, Categories, Technicians, Audit log all load. PRINTING again → "already exists";
+      Vikram back from leave; Tanvi deactivated and reactivated; the "(you)" row's button is
+      disabled. The audit log filtered to INC-0032 shows Kiran's "Info requested" first.
+    - The report form offers the new PRINTING category.
+    - Console: no errors apart from the expected 409.

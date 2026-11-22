@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { INCIDENT_STATUSES, type IncidentStatus, type UserResponse } from '@/api/types'
-import { availableActions, type ActionSubject, type IncidentAction } from './actions'
+import { availableActions, changesStatus, type ActionSubject, type IncidentAction } from './actions'
 
 const employee: UserResponse = { id: 'U-EMP-1', name: 'Asha', email: 'e@x', role: 'EMPLOYEE' }
 const otherEmployee: UserResponse = { id: 'U-EMP-2', name: 'Other', email: 'o@x', role: 'EMPLOYEE' }
@@ -14,11 +14,11 @@ function incident(status: IncidentStatus, assignedTechnicianId: string | null = 
 
 // The expected table, written out in full: role x status -> actions.
 const EXPECTED: Record<IncidentStatus, { reporter: IncidentAction[]; technician: IncidentAction[]; admin: IncidentAction[] }> = {
-  NEW: { reporter: [], technician: [], admin: ['classify'] },
-  CLASSIFIED: { reporter: [], technician: [], admin: ['assign'] },
-  ASSIGNED: { reporter: [], technician: ['acknowledge'], admin: ['reassign'] },
-  ACKNOWLEDGED: { reporter: [], technician: ['start', 'addNote'], admin: ['reassign'] },
-  IN_PROGRESS: { reporter: [], technician: ['addNote', 'resolve'], admin: ['reassign'] },
+  NEW: { reporter: ['comment'], technician: [], admin: ['classify'] },
+  CLASSIFIED: { reporter: ['comment'], technician: [], admin: ['assign'] },
+  ASSIGNED: { reporter: ['comment'], technician: ['acknowledge'], admin: ['reassign'] },
+  ACKNOWLEDGED: { reporter: ['comment'], technician: ['start', 'addNote', 'requestInfo'], admin: ['reassign'] },
+  IN_PROGRESS: { reporter: ['comment'], technician: ['addNote', 'resolve', 'requestInfo'], admin: ['reassign'] },
   RESOLVED: { reporter: ['verify', 'reopen'], technician: [], admin: [] },
   VERIFIED: { reporter: ['close'], technician: [], admin: ['close'] },
   CLOSED: { reporter: [], technician: [], admin: [] },
@@ -45,5 +45,21 @@ describe('availableActions', () => {
 
   it('a technician gets nothing on an unassigned incident', () => {
     expect(availableActions(incident('ASSIGNED', null), technician)).toEqual([])
+  })
+
+  it('a technician cannot ask a second question while one is open', () => {
+    const waiting: ActionSubject = { ...incident('IN_PROGRESS'), pendingInfoRequest: 'Which room?' }
+    expect(availableActions(waiting, technician)).toEqual(['addNote', 'resolve'])
+    // The reporter can still comment: that comment is the answer.
+    expect(availableActions(waiting, employee)).toEqual(['comment'])
+  })
+})
+
+describe('changesStatus', () => {
+  it('is false for notes, comments and questions, true for lifecycle moves', () => {
+    expect(changesStatus('addNote')).toBe(false)
+    expect(changesStatus('comment')).toBe(false)
+    expect(changesStatus('requestInfo')).toBe(false)
+    expect(changesStatus('resolve')).toBe(true)
   })
 })

@@ -45,7 +45,11 @@ export type InstantString = string
 
 export type LoginRequest = { email: string; password: string }
 
-export type UserResponse = { id: string; name: string; email: string; role: Role }
+/** active is false for a deactivated account. Optional: sessions saved before v1.1 do not have it. */
+export type UserResponse = { id: string; name: string; email: string; role: Role; active?: boolean }
+
+/** POST /api/auth/register: always creates an employee. */
+export type RegisterRequest = { name: string; email: string; password: string }
 
 export type LoginResponse = { token: string; expiresAt: InstantString; user: UserResponse }
 
@@ -66,6 +70,8 @@ export type NoteResponse = {
   authorName: string
   text: string
   createdAt: LocalDateTimeString
+  /** true for the reporter's comments, false for the technician's investigation notes. */
+  fromReporter: boolean
 }
 
 export type AuditRecordResponse = {
@@ -105,6 +111,12 @@ export type IncidentResponse = {
   riskLevel: RiskLevel
   /** Share (0-100+) of the most urgent running SLA window already used; null when no clock runs. */
   slaPercentUsed: number | null
+  /** The technician's open question to the reporter; null when none is waiting. */
+  pendingInfoRequest: string | null
+  infoRequestedAt: LocalDateTimeString | null
+  /** 1-5, given by the reporter when verifying; null when none was given. */
+  feedbackRating: number | null
+  feedbackComment: string | null
   notes: NoteResponse[]
   auditTrail: AuditRecordResponse[]
   /** Filled only in the response to POST /api/incidents; empty everywhere else. */
@@ -170,6 +182,8 @@ export type ReassignRequest = { newTechnicianId: string }
 export type AddNoteRequest = { text: string }
 export type ResolveRequest = { resolutionDetails: string }
 export type ReopenRequest = { reason: string }
+/** PATCH /verify body; both parts optional. */
+export type VerifyRequest = { rating?: number; comment?: string }
 
 /** TechnicianRecommendationResponse: one ranked technician for an incident (admin only). */
 export type TechnicianRecommendation = {
@@ -220,7 +234,12 @@ export type TechnicianResponse = {
   available: boolean
   activeIncidents: number
   maxWorkload: number
+  /** false once an administrator deactivates the account. */
+  active: boolean
 }
+
+/** PUT /api/admin/technicians/{id}: replaces all three. available = false means on leave. */
+export type UpdateTechnicianRequest = { skills: string[]; available: boolean; maxWorkload: number }
 
 // ---- Notifications ----
 
@@ -260,6 +279,40 @@ export type UpdateSlaPolicyRequest = { responseMinutes: number; resolutionMinute
 export type StrategyResponse = { current: string; available: string[] }
 export type ChangeStrategyRequest = { strategy: string }
 
+/** POST /api/admin/users. maxWorkload and skills are used only for technicians. */
+export type CreateUserRequest = {
+  name: string
+  email: string
+  password: string
+  role: Role
+  maxWorkload?: number
+  skills?: string[]
+}
+
+export type CreateCategoryRequest = { name: string; description?: string }
+
+/** One row of GET /api/admin/audit. actorId is null for automatic (SYSTEM) entries. */
+export type AuditLogEntry = {
+  id: number
+  incidentId: string | null
+  timestamp: LocalDateTimeString
+  actorId: string | null
+  actorName: string
+  action: string
+  previousStatus: IncidentStatus | null
+  newStatus: IncidentStatus | null
+  description: string | null
+}
+
+/** Query parameters of GET /api/admin/audit; all optional. actorId 'SYSTEM' = automatic entries. */
+export type AuditLogCriteria = {
+  incidentId?: string
+  actorId?: string
+  action?: string
+  from?: LocalDateTimeString
+  to?: LocalDateTimeString
+}
+
 export type SlaCheckResponse = { checkedAt: LocalDateTimeString; breachesRecorded: number; risksRecorded: number }
 
 // ---- Reports ----
@@ -298,4 +351,7 @@ export type ReportSummary = {
   openIncidents: number
   /** The same "right now" count split by priority. */
   openByPriority: Record<Priority, number>
+  /** Mean of the reporters' 1-5 ratings in the range; null when nobody rated. */
+  averageRating: number | null
+  ratingCount: number
 }

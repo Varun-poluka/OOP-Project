@@ -11,22 +11,34 @@ export type IncidentAction =
   | 'verify'
   | 'reopen'
   | 'close'
+  | 'comment'
+  | 'requestInfo'
 
-/** The incident fields the decision needs, so tests can pass small objects. */
-export type ActionSubject = Pick<IncidentResponse, 'status' | 'reporterId' | 'assignedTechnicianId'>
+/**
+ * The incident fields the decision needs, so tests can pass small objects.
+ * pendingInfoRequest may be left out: it then counts as "no open question".
+ */
+export type ActionSubject = Pick<IncidentResponse, 'status' | 'reporterId' | 'assignedTechnicianId'> &
+  Partial<Pick<IncidentResponse, 'pendingInfoRequest'>>
 
 // Mirrors the backend: the *State classes say which actions each status allows,
 // SecurityConfig says which role may call each one, and the service checks ownership.
 // Status -> actions, one table per kind of actor.
+// 'comment' (add information) is allowed until the incident is resolved.
 const REPORTER_ACTIONS: Partial<Record<IncidentStatus, IncidentAction[]>> = {
+  NEW: ['comment'],
+  CLASSIFIED: ['comment'],
+  ASSIGNED: ['comment'],
+  ACKNOWLEDGED: ['comment'],
+  IN_PROGRESS: ['comment'],
   RESOLVED: ['verify', 'reopen'],
   VERIFIED: ['close'],
 }
 
 const ASSIGNED_TECHNICIAN_ACTIONS: Partial<Record<IncidentStatus, IncidentAction[]>> = {
   ASSIGNED: ['acknowledge'],
-  ACKNOWLEDGED: ['start', 'addNote'],
-  IN_PROGRESS: ['addNote', 'resolve'],
+  ACKNOWLEDGED: ['start', 'addNote', 'requestInfo'],
+  IN_PROGRESS: ['addNote', 'resolve', 'requestInfo'],
 }
 
 const ADMIN_ACTIONS: Partial<Record<IncidentStatus, IncidentAction[]>> = {
@@ -50,12 +62,15 @@ export function availableActions(incident: ActionSubject, user: UserResponse): I
   }
   if (user.role === 'TECHNICIAN') {
     if (incident.assignedTechnicianId === null || incident.assignedTechnicianId !== user.id) return []
-    return ASSIGNED_TECHNICIAN_ACTIONS[incident.status] ?? []
+    const actions = ASSIGNED_TECHNICIAN_ACTIONS[incident.status] ?? []
+    // One question at a time: the backend refuses a second one (409) until the reporter answers.
+    const questionOpen = incident.pendingInfoRequest !== undefined && incident.pendingInfoRequest !== null
+    return questionOpen ? actions.filter((action) => action !== 'requestInfo') : actions
   }
   return ADMIN_ACTIONS[incident.status] ?? []
 }
 
-/** Actions that change the status; these ask for confirmation first. addNote does not. */
+/** Actions that change the status; these ask for confirmation first. Notes, comments and questions do not. */
 export function changesStatus(action: IncidentAction): boolean {
-  return action !== 'addNote'
+  return action !== 'addNote' && action !== 'comment' && action !== 'requestInfo'
 }

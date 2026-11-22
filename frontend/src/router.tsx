@@ -1,21 +1,27 @@
+import { Suspense } from 'react'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { AppShell } from '@/layout/AppShell'
 import { RootLayout } from '@/layout/RootLayout'
+import { LoadingState } from '@/components/LoadingState'
 import { LoginPage } from '@/pages/LoginPage'
 import {
   AssignmentStrategyPage,
   AtRiskPage,
+  AuditLogPage,
+  CategoriesPage,
   DashboardPage,
   IncidentDetailPage,
   MyIncidentsPage,
   MyQueuePage,
   NotificationsPage,
+  RegisterPage,
   ReportIncidentPage,
   SearchPage,
   ServicesPage,
   SlaPoliciesPage,
   TechniciansPage,
+  UsersPage,
 } from '@/pages/lazyPages'
 
 // Nested routes: a parent's element renders its matched child at <Outlet/>.
@@ -26,6 +32,16 @@ export const routes: RouteObject[] = [
     element: <RootLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
+      // Lazy like the app pages (it brings the form libraries), but outside AppShell, so it
+      // needs its own Suspense fallback while its file downloads.
+      {
+        path: '/register',
+        element: (
+          <Suspense fallback={<LoadingState label="Loading…" />}>
+            <RegisterPage />
+          </Suspense>
+        ),
+      },
       {
         element: <RequireAuth />,
         children: [
@@ -45,6 +61,9 @@ export const routes: RouteObject[] = [
               { path: '/admin/strategy', element: <AssignmentStrategyPage /> },
               { path: '/admin/services', element: <ServicesPage /> },
               { path: '/admin/technicians', element: <TechniciansPage /> },
+              { path: '/admin/users', element: <UsersPage /> },
+              { path: '/admin/categories', element: <CategoriesPage /> },
+              { path: '/admin/audit', element: <AuditLogPage /> },
               // Shared
               { path: '/incidents/:id', element: <IncidentDetailPage /> },
               { path: '/notifications', element: <NotificationsPage /> },

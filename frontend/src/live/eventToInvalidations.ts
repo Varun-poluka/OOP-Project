@@ -32,6 +32,8 @@ export function eventToInvalidations(event: LiveEvent, userId: string): CacheUpd
         queryKeys.queue(),
         queryKeys.atRisk(),
         queryKeys.reports(),
+        // A technician's workload changes when an incident is assigned to or resolved by them.
+        queryKeys.technicianMe(),
       ],
       set: [],
     }

@@ -1,20 +1,26 @@
-import { Users } from 'lucide-react'
+import { useState } from 'react'
+import { Pencil, Users } from 'lucide-react'
 import type { TechnicianResponse } from '@/api/types'
-import { useTechnicians } from '@/api/useReferenceData'
+import { useCategories, useTechnicians } from '@/api/useReferenceData'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryState } from '@/components/QueryState'
+import { WorkloadBar } from '@/components/WorkloadBar'
+import { Button } from '@/components/ui/button'
+import { TechnicianEditDialog } from '@/features/admin/TechnicianEditDialog'
 import { cn } from '@/lib/utils'
 
-/** Read-only overview of the technicians the assignment strategies choose from. */
+/** The technicians the assignment strategies choose from, with an Edit dialog per row. */
 export function TechniciansPage() {
   const technicians = useTechnicians()
+  const categories = useCategories()
+  const [editing, setEditing] = useState<TechnicianResponse | null>(null)
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Administration"
         title="Technicians"
-        description="Skills, availability and how much of each technician's capacity is in use."
+        description="Skills, availability and how much of each technician's capacity is in use. Accounts are created on the Users page."
       />
       <QueryState
         query={technicians}
@@ -30,6 +36,9 @@ export function TechniciansPage() {
                   <th scope="col" className="px-4 py-2.5 font-medium">Skills</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
                   <th scope="col" className="w-64 px-4 py-2.5 font-medium">Workload</th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -55,13 +64,28 @@ export function TechniciansPage() {
                         <span className="inline-flex items-center gap-1.5 text-sm">
                           <span
                             aria-hidden
-                            className={cn('size-2 rounded-full', tech.available ? 'bg-sla-ok' : 'bg-phase-closed')}
+                            className={cn(
+                              'size-2 rounded-full',
+                              tech.active && tech.available ? 'bg-sla-ok' : 'bg-phase-closed',
+                            )}
                           />
-                          {tech.available ? 'Available' : 'Away'}
+                          {!tech.active ? 'Deactivated' : tech.available ? 'Available' : 'On leave'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <WorkloadBar tech={tech} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!categories.isSuccess}
+                          onClick={() => setEditing(tech)}
+                          aria-label={`Edit ${tech.name}`}
+                        >
+                          <Pencil />
+                          Edit
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -70,35 +94,10 @@ export function TechniciansPage() {
           </div>
         )}
       </QueryState>
-    </div>
-  )
-}
 
-/** Active incidents out of the maximum; full (no more automatic assignments) is shown in words too. */
-function WorkloadBar({ tech }: { tech: TechnicianResponse }) {
-  const percent = tech.maxWorkload > 0 ? Math.min(100, (tech.activeIncidents / tech.maxWorkload) * 100) : 0
-  const full = tech.activeIncidents >= tech.maxWorkload
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-xs">
-        <span className="font-mono tabular">
-          {tech.activeIncidents} / {tech.maxWorkload} active
-        </span>
-        {full && <span className="font-medium text-sla-warning">Full</span>}
-      </div>
-      <div
-        role="meter"
-        aria-label={`${tech.name} workload`}
-        aria-valuemin={0}
-        aria-valuemax={tech.maxWorkload}
-        aria-valuenow={tech.activeIncidents}
-        className="h-1.5 overflow-hidden rounded-full bg-muted"
-      >
-        <div
-          className={cn('h-full rounded-full', full ? 'bg-sla-warning' : 'bg-primary')}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
+      {editing !== null && categories.isSuccess && (
+        <TechnicianEditDialog tech={editing} categories={categories.data} onClose={() => setEditing(null)} />
+      )}
     </div>
   )
 }

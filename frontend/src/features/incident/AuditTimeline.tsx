@@ -1,17 +1,10 @@
 import { ArrowRight } from 'lucide-react'
 import type { AuditRecordResponse } from '@/api/types'
 import { StatusBadge } from '@/components/StatusBadge'
+import { humaniseAction } from '@/lib/labels'
 import { formatDateTime, formatRelative } from '@/lib/time'
 import { useNow } from '@/lib/useNow'
 import { Panel } from './Panel'
-
-/** "PRIORITY_RAISED" -> "Priority raised"; "SLA_RESPONSE_BREACHED" -> "SLA response breached". */
-function humaniseAction(action: string): string {
-  const words = action.replace(/_/g, ' ').toLowerCase()
-  const sentence = words.charAt(0).toUpperCase() + words.slice(1)
-  // Lower-casing turned the acronym into "Sla"; put it back.
-  return sentence.replace(/\bsla\b/gi, 'SLA')
-}
 
 /** Everything that happened to the incident, newest first. */
 export function AuditTimeline({ records }: { records: AuditRecordResponse[] }) {

@@ -10,6 +10,7 @@ import type {
   PageResponse,
   Priority,
   TechnicianRecommendation,
+  VerifyRequest,
 } from './types'
 
 // One function per endpoint in IncidentController. encodeURIComponent keeps odd IDs safe in the URL.
@@ -62,7 +63,17 @@ export const incidentsApi = {
   resolve: (id: string, resolutionDetails: string) =>
     apiFetch<IncidentResponse>(`${incidentPath(id)}/resolve`, { method: 'PATCH', body: { resolutionDetails } }),
 
-  verify: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/verify`, { method: 'PATCH' }),
+  /** The reporter's comment; it also answers an open information request. */
+  addComment: (id: string, text: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/comments`, { method: 'POST', body: { text } }),
+
+  /** The assigned technician asks the reporter a question. */
+  requestInfo: (id: string, question: string) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/info-request`, { method: 'POST', body: { question } }),
+
+  /** feedback is optional: a 1-5 rating and/or a comment. */
+  verify: (id: string, feedback: VerifyRequest = {}) =>
+    apiFetch<IncidentResponse>(`${incidentPath(id)}/verify`, { method: 'PATCH', body: feedback }),
 
   close: (id: string) => apiFetch<IncidentResponse>(`${incidentPath(id)}/close`, { method: 'PATCH' }),
 

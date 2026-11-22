@@ -55,3 +55,11 @@ export function criticalityLabel(value: number): string {
   if (value === 2) return 'Important'
   return 'Standard'
 }
+
+/** "PRIORITY_RAISED" -> "Priority raised"; "SLA_RESPONSE_BREACHED" -> "SLA response breached". */
+export function humaniseAction(action: string): string {
+  const words = action.replace(/_/g, ' ').toLowerCase()
+  const sentence = words.charAt(0).toUpperCase() + words.slice(1)
+  // Lower-casing turned the acronym into "Sla"; put it back.
+  return sentence.replace(/\bsla\b/gi, 'SLA')
+}

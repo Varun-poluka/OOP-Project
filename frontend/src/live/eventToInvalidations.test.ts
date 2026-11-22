@@ -14,6 +14,7 @@ describe('eventToInvalidations', () => {
       queryKeys.queue(),
       queryKeys.atRisk(),
       queryKeys.reports(),
+      queryKeys.technicianMe(),
     ])
     expect(update.set).toEqual([])
   })

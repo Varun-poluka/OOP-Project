@@ -14,7 +14,9 @@ export type ActionCommand =
   | { action: 'start' }
   | { action: 'addNote'; text: string }
   | { action: 'resolve'; resolutionDetails: string }
-  | { action: 'verify' }
+  | { action: 'verify'; rating?: number; comment?: string }
+  | { action: 'comment'; text: string }
+  | { action: 'requestInfo'; question: string }
   | { action: 'reopen'; reason: string }
   | { action: 'close' }
 
@@ -35,7 +37,11 @@ function run(id: string, command: ActionCommand): Promise<IncidentResponse> {
     case 'resolve':
       return incidentsApi.resolve(id, command.resolutionDetails)
     case 'verify':
-      return incidentsApi.verify(id)
+      return incidentsApi.verify(id, { rating: command.rating, comment: command.comment })
+    case 'comment':
+      return incidentsApi.addComment(id, command.text)
+    case 'requestInfo':
+      return incidentsApi.requestInfo(id, command.question)
     case 'reopen':
       return incidentsApi.reopen(id, command.reason)
     case 'close':
@@ -62,7 +68,16 @@ function successMessage(command: ActionCommand, incident: IncidentResponse): str
     case 'resolve':
       return `Resolved. ${incident.reporterName} will be asked to verify`
     case 'verify':
-      return 'Verified. Thanks for confirming the fix'
+      return command.rating !== undefined || command.comment !== undefined
+        ? 'Verified. Thanks for the feedback'
+        : 'Verified. Thanks for confirming the fix'
+    case 'comment':
+      // The backend clears the open question when this comment answers it.
+      return incident.pendingInfoRequest === null && incident.auditTrail.at(-1)?.action === 'INFO_PROVIDED'
+        ? `Answer sent to ${incident.assignedTechnicianName ?? 'the technician'}`
+        : 'Comment added'
+    case 'requestInfo':
+      return `Question sent to ${incident.reporterName}`
     case 'reopen':
       return 'Reopened and sent back to the technician'
     case 'close':
@@ -85,6 +100,7 @@ export function useIncidentAction(incidentId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.incidentLists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations(incidentId) })
       void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.technicianMe() })
       toast.success(successMessage(command, incident))
     },
     onError: (error) => {

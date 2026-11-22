@@ -97,6 +97,8 @@ Every user has the password `password123`. The first four also exist without the
 | Employees | rahul.verma, sneha.iyer, karthik.rao, meera.nair, aditya.singh, fatima.shaikh, rohan.das `@itsm.local` | demo |
 
 ## Features
+- Self-registration for employees (Register link on the login page); administrators create
+  technician and admin accounts
 - Report an incident (employee, or admin on behalf of an employee); possible duplicates are shown
   before submitting
 - Automatic priority from impact × urgency × business criticality, raised one level when the affected
@@ -105,6 +107,15 @@ Every user has the password `password123`. The first four also exist without the
   and reassign for admins; technician recommendations with scores and reasons
 - Full lifecycle with an audit record for every step: acknowledge, start, notes, resolve, verify,
   close, reopen ([state diagram](docs/diagrams/incident-states.svg))
+- Reporter and technician talk on the incident: the reporter adds information to an unfinished
+  incident; the technician asks a question ("Information requested" banner for the reporter), and the
+  reporter's reply answers it. A flag, not an extra lifecycle state
+- Optional feedback when verifying (1-5 stars and a comment), shown on the incident; the admin
+  dashboard shows the average rating
+- Technician queue header with their own workload (active / max)
+- Administration: users (create any role, deactivate / reactivate; deactivated users cannot sign in
+  but keep their history), technicians (skills, on leave, max workload), categories, and a
+  system-wide audit log with filters
 - SLA response and resolution deadlines per priority, checked every minute; at-risk warning at 75%
   of the window, breach flags, at-risk list and a per-technician work queue sorted by urgency
 - Service dependency graph with impact analysis (which services an outage affects, and how far away)
@@ -114,12 +125,14 @@ Every user has the password `password123`. The first four also exist without the
 - JWT login with role-based access (Employee, Technician, Administrator)
 
 ## Endpoints
-All endpoints except login, health and Swagger need `Authorization: Bearer <token>`.
-Errors are returned as `application/problem+json`; a refused lifecycle action is 409.
+All endpoints except login, register, health and Swagger need `Authorization: Bearer <token>`.
+Errors are returned as `application/problem+json`; a refused lifecycle action, a duplicate
+(email, category) and deactivating yourself are 409.
 
 | Method and path | Who | What |
 |---|---|---|
-| `POST /api/auth/login` | public | Email + password → JWT |
+| `POST /api/auth/login` | public | Email + password → JWT (401 with a clear message for a deactivated account) |
+| `POST /api/auth/register` | public | Name, email, password (8+) → new **employee**; duplicate email 409 |
 | `GET /api/auth/me` | any user | The caller's id, name, email, role |
 | `GET /api/health` | public | Health check |
 | `POST /api/incidents` | Employee, Admin | Report; response includes `possibleDuplicates` |
@@ -137,14 +150,21 @@ Errors are returned as `application/problem+json`; a refused lifecycle action is
 | `PATCH /api/incidents/{id}/acknowledge` | assigned Technician | ASSIGNED → ACKNOWLEDGED |
 | `PATCH /api/incidents/{id}/start` | assigned Technician | ACKNOWLEDGED → IN_PROGRESS |
 | `POST /api/incidents/{id}/notes` | assigned Technician | Add an investigation note |
+| `POST /api/incidents/{id}/info-request` | assigned Technician | Ask the reporter a question (ACKNOWLEDGED / IN_PROGRESS; one open at a time) |
+| `POST /api/incidents/{id}/comments` | reporter (Employee) | Add information to an unfinished incident; answers an open question |
 | `PATCH /api/incidents/{id}/resolve` | assigned Technician | IN_PROGRESS → RESOLVED with details |
-| `PATCH /api/incidents/{id}/verify` | reporter (Employee) | RESOLVED → VERIFIED |
+| `PATCH /api/incidents/{id}/verify` | reporter (Employee) | RESOLVED → VERIFIED; optional body `{rating: 1-5, comment}` |
 | `PATCH /api/incidents/{id}/reopen` | reporter (Employee) | RESOLVED → IN_PROGRESS with a reason |
 | `PATCH /api/incidents/{id}/close` | reporter or Admin | VERIFIED → CLOSED |
 | `GET` / `PUT /api/admin/assignment-strategy` | Admin | Current / change assignment strategy |
 | `POST /api/admin/sla/check` | Admin | Run the SLA check now |
 | `GET /api/admin/sla/policies`, `PUT /api/admin/sla/policies/{priority}` | Admin | Read / change SLA targets |
-| `GET /api/reports/summary` | Admin | For `from`/`to` (default last 30 days): counts by status, priority, category, SLA compliance, technician workload. Plus the current backlog, independent of the range: `openIncidents` and `openByPriority` (P1–P4, 0 when none) |
+| `GET` / `POST /api/admin/users` | Admin | All users with role and status / create an employee, technician or admin |
+| `PATCH /api/admin/users/{id}/deactivate`, `/reactivate` | Admin | Stop / allow sign-in (not yourself; not a technician with active incidents) |
+| `PUT /api/admin/technicians/{id}` | Admin | Skills, availability (on leave), max workload |
+| `POST /api/admin/categories` | Admin | Add a category (name, description); duplicate 409 |
+| `GET /api/admin/audit` | Admin | Audit records of all incidents, newest first; filters `incidentId, actorId (or SYSTEM), action, from, to`; `page`, `size` (max 100) |
+| `GET /api/reports/summary` | Admin | For `from`/`to` (default last 30 days): counts by status, priority, category, SLA compliance, technician workload, `averageRating` and `ratingCount`. Plus the current backlog, independent of the range: `openIncidents` and `openByPriority` (P1–P4, 0 when none) |
 | `GET /api/services` | any user | Services with dependencies and open incident counts |
 | `GET /api/services/{id}/impact` | Technician, Admin | Impacted services with distance in hops |
 | `POST /api/services` | Admin | Create a service |
@@ -153,7 +173,8 @@ Errors are returned as `application/problem+json`; a refused lifecycle action is
 | `GET /api/notifications/unread-count` | any user | `{"unreadCount": n}` |
 | `PATCH /api/notifications/{id}/read` | the recipient | Mark as read |
 | `GET /api/categories` | any user | Categories with descriptions |
-| `GET /api/technicians` | Admin | Technicians with skills, availability and workload |
+| `GET /api/technicians` | Admin | Technicians with skills, availability, workload and `active` |
+| `GET /api/technicians/me` | Technician | The caller's own skills and workload |
 | `GET /api/stream` | any user | Server-Sent Events: `connected`, `incident`, `notification`, heartbeat every 25 s |
 
 ## Documentation
@@ -166,6 +187,8 @@ Errors are returned as `application/problem+json`; a refused lifecycle action is
   [frontend learning log](docs/learning-log-frontend.md)
 
 ## Known limitations
+- **A deactivated user's existing token still works until it expires** (8 h). Login is refused at
+  once, but checking the flag on every request would cost a database read per call.
 - **Single instance only.** SSE connections live in the memory of one JVM (`LiveUpdateRegistry`), and
   `SlaScheduler` would run on every instance. Several instances would need a shared message broker
   and a scheduler lock.
