@@ -57,9 +57,9 @@ new screens are numbered from 31.
 
 | Fig. | File | Caption |
 |------|------|---------|
-| 23 | `jacoco-coverage.png` | JaCoCo coverage summary after `./mvnw verify`: 85% instruction and 72% branch coverage. |
-| 24 | `mvnw-verify-summary.png` | `./mvnw verify` result: 249 tests, 0 failures, BUILD SUCCESS. |
-| 25 | `npm-test-summary.png` | `npm test` (Vitest) result: 25 test files, 231 tests passed. |
+| 23 | `jacoco-coverage.png` | JaCoCo coverage summary after `./mvnw verify` (v1.1): 88% instruction and 75% branch coverage. |
+| 24 | `mvnw-verify-summary.png` | `./mvnw verify` result (v1.1): 315 tests, 0 failures, BUILD SUCCESS. |
+| 25 | `npm-test-summary.png` | `npm test` (Vitest) result (v1.1): 30 test files, 263 tests passed. |
 | 26 | `live-update-before.png` | Live update, before: technician queue open in the browser. |
 | 27 | `live-update-after.png` | Live update, after: the queue updates by itself when another user changes an incident. |
 | 28 | `network-timeline-priority-raised.png` | Network incident history showing the system's PRIORITY_RAISED event (P3 → P2, 11 dependent services). |
