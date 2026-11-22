@@ -833,3 +833,20 @@ frontend and backend work can happen in parallel without editing the same file.
       disabled. The audit log filtered to INC-0032 shows Kiran's "Info requested" first.
     - The report form offers the new PRINTING category.
     - Console: no errors apart from the expected 409.
+
+---
+
+### 2026-11-22: Slice F6 (screens) · Report screenshots for v1.1
+
+- **What was built:**
+  - Retaken: `login-page`, `technician-queue`, `admin-dashboard(-full)`, `admin-technicians`.
+  - New: `register-page`, `employee-info-requested`, `employee-incident-feedback`, `admin-users`,
+    `admin-users-new-technician`, `admin-categories`, `admin-technician-edit`, `admin-audit-log` and
+    `admin-audit-log-filtered`, in `report/figures/screens/`. Captions are in `report/figures/README.md`.
+- **How:** Playwright at 1440×900, deviceScaleFactor 2, light mode, against v1.1 on a scratch copy of
+  the demo data. For the queue figure, INC-0036 (unassigned P1) was assigned to the #2 recommendation
+  (Kiran Support), so his queue shows the red P1 edge and "5 / 8 active".
+- **Lesson:** in the long-running Playwright tab, clicks stopped reaching React halfway through the
+  check (typing still worked; calling the button's handler directly opened the dialog). A fresh
+  browser context behaved normally, so the remaining checks and all screenshots used a new context.
+  When a browser test fails strangely, retry in a clean context before changing the app.
