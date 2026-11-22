@@ -72,6 +72,21 @@ class NotificationRulesTest {
         assertFalse(NotificationRules.shouldNotifyTechnician(event(action, TECH)));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"COMMENT_ADDED", "INFO_PROVIDED", "FEEDBACK_GIVEN"})
+    void technicianHearsWhatTheReporterAdds(String action) {
+        IncidentEvent event = event(action, REPORTER);
+        assertTrue(NotificationRules.shouldNotifyTechnician(event));
+        assertFalse(NotificationRules.shouldNotifyReporter(event)); // the reporter did it themselves
+    }
+
+    @Test
+    void reporterIsAskedForInformation() {
+        IncidentEvent event = event("INFO_REQUESTED", TECH);
+        assertTrue(NotificationRules.shouldNotifyReporter(event));
+        assertFalse(NotificationRules.shouldNotifyTechnician(event));
+    }
+
     @Test
     void noTechnicianMeansNoTechnicianNotification() {
         assertFalse(NotificationRules.shouldNotifyTechnician(event("SLA_RESPONSE_BREACHED", null, null, "late")));

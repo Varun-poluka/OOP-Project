@@ -583,3 +583,111 @@ A new entry is appended at the end of every slice, in the same commit as the cod
     - `POST /api/admin/sla/check`: the new notifications and `[EMAIL]` log lines read e.g. "Response
       SLA breached: not acknowledged by 21 Nov, 6:31 PM". Notifications created before this slice
       keep the old text until the demo data is reset.
+
+---
+
+### 2026-11-22: Slice 7 (backend) · Registration, reporter comments, info requests, feedback, admin users, categories, audit log
+
+- **What was built:**
+  - `POST /api/auth/register`: anyone can create an **employee** account (a duplicate email gives 409).
+  - Login refuses a deactivated account with 401 "This account has been deactivated. Contact your
+    administrator."
+  - `POST /api/incidents/{id}/comments`: the reporter adds information to their own unfinished
+    incident. It is stored with the notes but marked `fromReporter`, audited as `COMMENT_ADDED`, and
+    sent to the technician.
+  - `POST /api/incidents/{id}/info-request`: the assigned technician asks the reporter a question
+    (`INFO_REQUESTED`, notifies the reporter). The reporter's next comment answers it
+    (`INFO_PROVIDED`) and clears the request.
+  - `PATCH /api/incidents/{id}/verify` takes an optional body `{rating 1-5, comment}`. It is stored
+    on the incident and audited as `FEEDBACK_GIVEN`; the report summary gained `averageRating` and
+    `ratingCount`.
+  - Admin: `GET/POST /api/admin/users`, `PATCH /api/admin/users/{id}/deactivate|reactivate`,
+    `PUT /api/admin/technicians/{id}` (skills, on leave, max workload), `POST /api/admin/categories`,
+    `GET /api/admin/audit` (paged, filters, newest first).
+  - `GET /api/technicians/me` for the technician's own workload.
+- **Why:** these were the MVP use cases from the project statement that were still missing for each
+  role (employee: register, add information, feedback; technician: ask for information, see own
+  workload; admin: manage users, technicians and categories, read the audit log).
+- **Files (domain changes, each needed by a feature):**
+  - `User`: `active` flag, `deactivate()`, `reactivate()`. Users are never deleted, so their history
+    stays linked.
+  - `Technician`: `replaceSkills`, `changeMaxWorkload` (at least 1 and not below current work);
+    `canTakeMoreWork()` is false for a deactivated technician.
+  - `InvestigationNote`: author is now any `User`; `isFromReporter()` is true when the author is an
+    `Employee`. The column already pointed at the shared `users` table, so the schema is the same.
+  - `AuditRecord`: read-only `incidentId` (and `getId()`) for the audit log filter.
+  - `Incident`: `addReporterComment`, `requestInfo`, `verify(employee, rating, comment)`, and the
+    fields `pendingInfoRequest`, `infoRequestedAt`, `feedbackRating`, `feedbackComment`.
+  - `IncidentState` and the five unfinished states: `addReporterComment`; `AcknowledgedState` and
+    `InProgressState`: `requestInfo`; `ResolvedState.verify` passes the feedback on.
+  - `exception/DuplicateResourceException` → 409.
+- **Files (application):**
+  - `service/UserAccounts` (new, shared): duplicate-email check, next free id per role (`U-EMP-9`).
+  - `service/AuthService`, `controller/AuthController`: registration, deactivated check.
+  - `service/AdminUserService`, `service/AuditLogService` (new); `repository/AuditRecordRepository`,
+    `repository/AuditSpecifications` (new); `controller/AdminController`: the admin endpoints.
+  - `service/ReferenceDataService`, `controller/ReferenceDataController`: create category,
+    technician `me`.
+  - `service/IncidentService`, `controller/IncidentController`: comments, info request, verify body.
+  - `service/RecommendationService`: deactivated technicians are never recommended.
+  - `service/ReportCalculator`, `service/ReportService`, `dto/ReportSummary`: average rating.
+  - `service/notification/NotificationRules`, `NotificationMessageFormatter`: who hears about the new
+    actions and how the message reads ("Dev Database needs more information: …").
+  - DTOs: `RegisterRequest`, `CreateUserRequest`, `UpdateTechnicianRequest`, `CreateCategoryRequest`,
+    `RequestInfoRequest`, `VerifyRequest`, `AuditLogCriteria`, `AuditLogEntry` (new); `UserResponse`
+    (+`active`), `TechnicianResponse` (+`active`), `NoteResponse` (+`fromReporter`),
+    `IncidentResponse` (+ info request and feedback fields).
+  - `config/SecurityConfig`: rules for the new URLs; CORS origins now come from the property
+    `itsm.cors.allowed-origins` (default `http://localhost:5173`).
+  - `config/DemoDataLoader`: seven demo verifications now include a rating.
+  - Tests: `IncidentReporterInteractionTest`, `UserAccountTest` (new), `IncidentStateTransitionTest`
+    (two new actions, 96 cases), rules/formatter/calculator cases; integration tests
+    `RegistrationIntegrationTest`, `AdminUserIntegrationTest`, `CategoryAdminIntegrationTest`,
+    `AuditLogIntegrationTest`, `ReporterInteractionIntegrationTest`. `AuthAndAccessIntegrationTest`
+    now finds its second employee by email, because registration may already have taken `U-EMP-2`.
+- **Key concepts:**
+  - **Why "information requested" is not a lifecycle state:** waiting for an answer does not move
+    the incident forward or back. A `WAITING_FOR_INFO` state would need transitions from both
+    ACKNOWLEDGED and IN_PROGRESS and a rule for where to return, and it would touch the SLA clocks,
+    reports and every state table. A flag beside the status (`pendingInfoRequest`) answers "is a
+    question open?" without changing the state machine. The State pattern still decides *when*
+    asking is allowed: only `AcknowledgedState` and `InProgressState` override `requestInfo`.
+  - **One audit record per action:** a comment that answers a question is recorded once, as
+    `INFO_PROVIDED`, not as `COMMENT_ADDED` plus `INFO_PROVIDED`. Each audit record becomes one event,
+    so this also means one notification.
+  - **Soft delete (deactivation):** the row stays, only a flag changes. Foreign keys from incidents,
+    notes and audit records stay valid, so history is kept. A technician with active incidents
+    cannot be deactivated (409), so no incident is left with nobody to work on it.
+  - **`DisabledException`:** a Spring Security `AuthenticationException`, so the existing handler turns
+    it into 401. It is thrown only after the password matched, so a stranger guessing passwords
+    still sees the generic "Invalid email or password".
+  - **Mapping one column twice in JPA:** `Incident.auditTrail` owns the `incident_id` join column.
+    `AuditRecord.incidentId` maps the same column with `insertable = false, updatable = false`, so
+    JPA reads it but never writes it twice.
+  - **Specifications:** like the incident search, the audit log adds one small predicate per filter
+    that was given and combines them with `Specification.allOf`. `actorId=SYSTEM` means "no actor".
+  - **409 vs 400:** a request that is well-formed but clashes with existing data (duplicate email,
+    duplicate category, deactivating yourself) is a *conflict* (409); a malformed field is 400.
+  - **Optional request body:** `@RequestBody(required = false)` lets `PATCH /verify` work with no body
+    (older clients) and with `{rating, comment}`.
+- **Known limitation:** a token issued before a user was deactivated stays valid until it expires
+  (8 h). Checking the flag on every request would cost a database read per call.
+- **How it was tested:**
+  - `./mvnw verify`: 315 tests, 0 failures (was 249), BUILD SUCCESS; JaCoCo 88.1% instructions,
+    75.8% branches.
+  - On port 8081 against a fresh `itsm_demo_check` database (demo profile), with curl:
+    - `POST /api/auth/register` → 201 `U-EMP-9`; same email in capitals → 409; blank name, bad email,
+      short password → 400 naming all three fields.
+    - `POST /api/incidents/INC-0022/info-request` as Dev → 200; again → 409 "A question is already
+      waiting…"; as Asha → 403. `POST …/comments` as Asha → 200 and the audit shows `INFO_PROVIDED`;
+      as Dev → 403.
+    - `GET /api/technicians/me` as Dev → `activeIncidents 3, maxWorkload 4`.
+    - `GET /api/admin/users` as Asha → 403. `POST /api/admin/users` (technician Vikram) → 201
+      `U-TEC-6`; duplicate admin email → 409.
+    - Deactivate `U-EMP-9` → 200; their login → 401 with the deactivated message; reactivate → 200.
+      Deactivate `U-ADM-1` as `U-ADM-1` → 409; deactivate Dev (3 active) → 409 "Reassign them first".
+    - `PUT /api/admin/technicians/U-TEC-6` → 200 with the new skills; `maxWorkload 0` → 400.
+    - `POST /api/admin/categories` `printing` → 201 `PRINTING`; again → 409; as Asha → 403.
+    - `GET /api/admin/audit?incidentId=INC-0022` → newest first (`INFO_PROVIDED`, `INFO_REQUESTED`, …);
+      `action=FEEDBACK_GIVEN` → 7 demo records; `size=500` → 400.
+    - `GET /api/reports/summary` → `averageRating 4.3, ratingCount 7`.

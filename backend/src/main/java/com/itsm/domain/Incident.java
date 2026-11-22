@@ -55,6 +55,19 @@ public class Incident {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean resolutionAtRisk;
 
+    // Set while the technician waits for an answer from the reporter (the question itself).
+    // A flag beside the status, not a lifecycle state: asking does not move the incident.
+    @Column(length = 2000)
+    private String pendingInfoRequest;
+    private LocalDateTime infoRequestedAt;
+    // Optional feedback the reporter gives when verifying the fix.
+    private Integer feedbackRating;
+    @Column(length = 2000)
+    private String feedbackComment;
+
+    public static final int MIN_RATING = 1;
+    public static final int MAX_RATING = 5;
+
     // A running SLA clock is "at risk" once this share of its window has been used.
     public static final double RISK_THRESHOLD = 0.75;
 
@@ -227,25 +240,78 @@ public class Incident {
         auditTrail.add(new AuditRecord(tech, "NOTE_ADDED", null, null, text));
     }
 
+    private void requireReporter(Employee employee, String what){
+        if(employee == null){
+            throw new NullPointerException("Employee is required");
+        }
+        if(!employee.equals(reporter)){
+            throw new UnauthorizedActionException("Only the reporter of the incident can " + what);
+        }
+    }
+
+    // A comment from the reporter is stored with the notes. If the technician asked a question,
+    // this comment is the answer: the request is cleared and the audit says INFO_PROVIDED.
+    void applyAddReporterComment(Employee employee, String text){
+        requireReporter(employee, "add a comment");
+        InvestigationNote note = new InvestigationNote(employee, text); // validates the text
+        notes.add(note);
+        if(pendingInfoRequest != null){
+            pendingInfoRequest = null;
+            infoRequestedAt = null;
+            auditTrail.add(new AuditRecord(employee, "INFO_PROVIDED", null, null, note.getText()));
+        }
+        else{
+            auditTrail.add(new AuditRecord(employee, "COMMENT_ADDED", null, null, note.getText()));
+        }
+    }
+
+    // The question is also kept as a technician note, so the notes read as a conversation.
+    void applyRequestInfo(Technician tech, String question){
+        requireAssignedTechnician(tech);
+        if(pendingInfoRequest != null){
+            throw new IllegalStateException("A question is already waiting for the reporter's answer");
+        }
+        InvestigationNote note = new InvestigationNote(tech, question); // validates the text
+        notes.add(note);
+        pendingInfoRequest = note.getText();
+        infoRequestedAt = LocalDateTime.now();
+        auditTrail.add(new AuditRecord(tech, "INFO_REQUESTED", null, null, note.getText()));
+    }
+
     void applyResolve(Technician tech, String details){
         requireAssignedTechnician(tech);
         if(details == null || details.isBlank()){
             throw new IllegalArgumentException("Resolution details Required");
         }
         tech.removeIncident();
+        // A question nobody answered no longer matters once the problem is fixed.
+        this.pendingInfoRequest = null;
+        this.infoRequestedAt = null;
         this.resolutionDetails = details.trim();
         this.resolvedAt = LocalDateTime.now();
         changeStatus(tech, IncidentStatus.RESOLVED, "RESOLVED",this.resolutionDetails);
     }
 
-    void applyVerify(Employee employee){
+    // rating and comment are optional; a rating, if given, must be 1-5.
+    void applyVerify(Employee employee, Integer rating, String comment){
         if(employee == null){
             throw new NullPointerException("Employee is required");
         }
         if(!employee.equals(reporter)){
             throw new UnauthorizedActionException("Only the reporter of the Incident can verify");
         }
+        if(rating != null && (rating < MIN_RATING || rating > MAX_RATING)){
+            throw new IllegalArgumentException("Rating must be between " + MIN_RATING + " and " + MAX_RATING);
+        }
+        String trimmed = (comment == null || comment.isBlank()) ? null : comment.trim();
         changeStatus(employee, IncidentStatus.VERIFIED, "VERIFIED", "Verified by: " + employee.getName());
+        if(rating != null || trimmed != null){
+            this.feedbackRating = rating;
+            this.feedbackComment = trimmed;
+            String stars = (rating == null) ? "No rating" : "Rated " + rating + "/" + MAX_RATING;
+            auditTrail.add(new AuditRecord(employee, "FEEDBACK_GIVEN", null, null,
+                    (trimmed == null) ? stars : stars + ": " + trimmed));
+        }
     }
 
     void applyClose(User actor){
@@ -293,7 +359,19 @@ public class Incident {
     }
 
     public void verify(Employee employee){
-        state().verify(this,employee);
+        verify(employee, null, null);
+    }
+
+    public void verify(Employee employee, Integer rating, String comment){
+        state().verify(this, employee, rating, comment);
+    }
+
+    public void addReporterComment(Employee employee, String text){
+        state().addReporterComment(this, employee, text);
+    }
+
+    public void requestInfo(Technician tech, String question){
+        state().requestInfo(this, tech, question);
     }
 
     public void close(User actor){
@@ -440,5 +518,25 @@ public class Incident {
 
     public boolean isResolutionAtRisk() {
         return resolutionAtRisk;
+    }
+
+    public String getPendingInfoRequest() {
+        return pendingInfoRequest;
+    }
+
+    public boolean isInfoRequested() {
+        return pendingInfoRequest != null;
+    }
+
+    public LocalDateTime getInfoRequestedAt() {
+        return infoRequestedAt;
+    }
+
+    public Integer getFeedbackRating() {
+        return feedbackRating;
+    }
+
+    public String getFeedbackComment() {
+        return feedbackComment;
     }
 }

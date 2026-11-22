@@ -35,6 +35,12 @@ final class ApiTestClient {
         return "m" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 
+    // An email nobody has used yet, for tests that create accounts.
+    static String freshEmail(String prefix) {
+        return prefix + "." + marker() + "@itsm.local";
+    }
+
+    // The "Authorization" header value for an admin-created or registered user (all use PASSWORD).
     String login(String email) throws Exception {
         String body = mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

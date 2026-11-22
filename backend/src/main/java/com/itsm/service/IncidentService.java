@@ -346,12 +346,36 @@ public class IncidentService {
         return IncidentResponse.from(incident);
     }
 
+    // The comment goes through the domain, which checks the caller is the reporter and the incident is unfinished.
     @Transactional
-    public IncidentResponse verify(String incidentId, String actorId) {
+    public IncidentResponse addComment(String incidentId, AddNoteRequest request, String actorId) {
         Incident incident = findIncident(incidentId);
         Employee employee = findEmployee(actorId);
         int before = incident.getAuditTrail().size();
-        incident.verify(employee);
+        incident.addReporterComment(employee, request.text());
+        eventPublisher.publishNewEvents(incident, before);
+        return IncidentResponse.from(incident);
+    }
+
+    @Transactional
+    public IncidentResponse requestInfo(String incidentId, RequestInfoRequest request, String actorId) {
+        Incident incident = findIncident(incidentId);
+        Technician tech = findTechnician(actorId);
+        int before = incident.getAuditTrail().size();
+        incident.requestInfo(tech, request.question());
+        eventPublisher.publishNewEvents(incident, before);
+        return IncidentResponse.from(incident);
+    }
+
+    // feedback may be null: verifying without a body means no rating and no comment.
+    @Transactional
+    public IncidentResponse verify(String incidentId, VerifyRequest feedback, String actorId) {
+        Incident incident = findIncident(incidentId);
+        Employee employee = findEmployee(actorId);
+        int before = incident.getAuditTrail().size();
+        Integer rating = (feedback == null) ? null : feedback.rating();
+        String comment = (feedback == null) ? null : feedback.comment();
+        incident.verify(employee, rating, comment);
         eventPublisher.publishNewEvents(incident, before);
         return IncidentResponse.from(incident);
     }

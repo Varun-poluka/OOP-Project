@@ -77,7 +77,9 @@ public class ReportService {
                 byPriority,
                 workload(incidents),
                 sum(open),
-                openByPriority(open));
+                openByPriority(open),
+                ReportCalculator.averageRating(incidents),
+                ReportCalculator.ratingCount(incidents));
     }
 
     // One row per priority present, plus UNCLASSIFIED for NEW incidents.

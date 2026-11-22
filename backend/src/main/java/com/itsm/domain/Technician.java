@@ -47,8 +47,35 @@ public class Technician extends User {
         return skills.contains(category);
     }
 
+    // A deactivated technician is never chosen, even if they are marked available.
     public boolean canTakeMoreWork(){
-        return available && activeIncidents < maxWorkload;
+        return isActive() && available && activeIncidents < maxWorkload;
+    }
+
+    // Check, then change: every skill is checked before the old set is replaced.
+    public void replaceSkills(Set<Category> newSkills){
+        if(newSkills == null){
+            throw new NullPointerException("Skills are required");
+        }
+        for(Category category : newSkills){
+            if(category == null){
+                throw new NullPointerException("Skill cannot be null");
+            }
+        }
+        skills.clear();
+        skills.addAll(newSkills);
+    }
+
+    // Lowering the limit below the work already held would leave the technician over capacity.
+    public void changeMaxWorkload(int maxWorkload){
+        if(maxWorkload < 1){
+            throw new IllegalArgumentException("Max Workload must be at least 1");
+        }
+        if(maxWorkload < activeIncidents){
+            throw new IllegalArgumentException("Max Workload cannot be below the " + activeIncidents
+                    + " incidents " + getName() + " is working on");
+        }
+        this.maxWorkload = maxWorkload;
     }
 
     void addIncident(){

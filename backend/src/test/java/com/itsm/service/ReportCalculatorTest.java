@@ -106,4 +106,26 @@ class ReportCalculatorTest {
         Incident open = incident(T0, true, T0.plusMinutes(10), null);
         assertNull(ReportCalculator.meanMinutesToResolve(List.of(open)));
     }
+
+    @Test
+    void averageRatingIgnoresIncidentsWithoutARating() {
+        Incident five = incident(T0, true, T0.plusMinutes(10), T0.plusMinutes(60));
+        Incident four = incident(T0, true, T0.plusMinutes(10), T0.plusMinutes(60));
+        Incident four2 = incident(T0, true, T0.plusMinutes(10), T0.plusMinutes(60));
+        Incident unrated = incident(T0, true, T0.plusMinutes(10), T0.plusMinutes(60));
+        five.verify(five.getReporter(), 5, null);
+        four.verify(four.getReporter(), 4, "ok");
+        four2.verify(four2.getReporter(), 4, null);
+        unrated.verify(unrated.getReporter());
+
+        List<Incident> all = List.of(five, four, four2, unrated);
+        assertEquals(3, ReportCalculator.ratingCount(all));
+        assertEquals(4.3, ReportCalculator.averageRating(all)); // 13 / 3 = 4.33, one decimal
+    }
+
+    @Test
+    void averageRatingIsNullWhenNobodyRated() {
+        assertNull(ReportCalculator.averageRating(List.of(incident(T0, true, null, null))));
+        assertEquals(0, ReportCalculator.ratingCount(List.of()));
+    }
 }

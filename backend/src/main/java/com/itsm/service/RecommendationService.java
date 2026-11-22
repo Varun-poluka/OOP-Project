@@ -41,6 +41,9 @@ public class RecommendationService {
 
         List<TechnicianScore> scores = new ArrayList<>();
         for (Technician tech : technicianRepository.findAll()) {
+            if (!tech.isActive()) {
+                continue; // a deactivated account can never be assigned, so it is never recommended
+            }
             int resolved = (int) incidentRepository.countByAssignedTechnicianIdAndCategoryNameAndStatusIn(
                     tech.getId(), categoryName, DONE);
             scores.add(scorer.score(tech, incident.getCategory(), resolved));

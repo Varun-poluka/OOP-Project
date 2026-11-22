@@ -178,7 +178,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "HARDWARE", "Classroom AV", Impact.MEDIUM, Urgency.MEDIUM)
                 .acknowledge(20).start(35).note(50, "HDMI cable at the lectern is damaged near the connector.")
                 .resolve(90, "Replaced the HDMI cable and reset the projector input to auto-detect.")
-                .verify(240).close(245, RAHUL);
+                .verify(240, 5, "Fixed quickly, thanks!").close(245, RAHUL);
         report(daysAgo(28, 11, 0), SNEHA, "Cannot connect to eduroam on new laptop",
                 "Windows 11 laptop keeps asking for credentials for eduroam and then fails to connect.",
                 "NETWORK", "Campus Wi-Fi", Impact.LOW, Urgency.MEDIUM)
@@ -190,7 +190,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "APPLICATION", "ERP", Impact.LOW, Urgency.MEDIUM)
                 .acknowledge(45).start(60).note(120, "Two cancelled electives were still counted in the total.")
                 .resolve(300, "Cleared the cancelled electives from the registration cache; total now shows 22.")
-                .verify(1500).close(1510, RAVI);
+                .verify(1500, 4, null).close(1510, RAVI);
         report(daysAgo(26, 10, 5), MEERA, "Library printer prints blank pages",
                 "Second floor printer in the library feeds paper but every page comes out blank.",
                 "HARDWARE", "Printing", Impact.LOW, Urgency.LOW)
@@ -202,7 +202,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "ACCESS", "SSO", Impact.MEDIUM, Urgency.HIGH)
                 .acknowledge(4).start(10).note(15, "Reset mails are queued: the mail relay rejected the sender domain.")
                 .resolve(28, "Fixed the relay allow-list for the SSO sender; queued reset mails were delivered.")
-                .verify(120).close(125, ADITYA);
+                .verify(120, 5, "Back up within two hours.").close(125, ADITYA);
         report(daysAgo(22, 15, 20), FATIMA, "Lab 2 PC number 14 will not boot",
                 "Black screen with 'No bootable device' on PC 14 in Lab 2.",
                 "HARDWARE", "Lab Workstations", Impact.LOW, Urgency.LOW)
@@ -214,7 +214,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "SECURITY", "Email", Impact.MEDIUM, Urgency.HIGH)
                 .acknowledge(8).start(12).note(30, "Same mail reached 140 staff mailboxes. Link points to a look-alike domain.")
                 .resolve(100, "Blocked the sender and the domain, purged the mail from all mailboxes, sent an advisory.")
-                .verify(400).close(405, ROHAN);
+                .verify(400, 4, "Good advice on the phishing mail.").close(405, ROHAN);
         report(daysAgo(19, 13, 10), ASHA, "Outlook keeps asking for password",
                 "Outlook on my office PC prompts for my password every few minutes since this morning.",
                 "APPLICATION", "Email", Impact.LOW, Urgency.MEDIUM)
@@ -227,7 +227,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 .acknowledge(5).start(9).note(15, "One reporting query is doing a full table scan on answers.")
                 .note(40, "Added a missing index on answers(attempt_id).")
                 .resolve(70, "Added the missing index; page loads are back under one second.")
-                .verify(500).close(505, RAVI);
+                .verify(500, 3, "Took a while, but it works now.").close(505, RAVI);
         report(daysAgo(16, 16, 45), SNEHA, "Need access to the research shared drive",
                 "I joined the Data Science lab and need read/write access to the lab's shared drive.",
                 "ACCESS", "SSO", Impact.LOW, Urgency.LOW)
@@ -257,7 +257,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "APPLICATION", "Payment App", Impact.HIGH, Urgency.HIGH)
                 .acknowledge(3).start(6).note(12, "Payment gateway callback URL still points to the old server.")
                 .resolve(25, "Updated the callback URL; test payment of Rs 1 succeeded.")
-                .verify(200).close(210, FATIMA);
+                .verify(200, 5, null).close(210, FATIMA);
         report(daysAgo(8, 10, 10), ROHAN, "VPN connects but no internal sites open",
                 "From home the VPN shows connected but ERP and LMS do not load.",
                 "NETWORK", "VPN", Impact.MEDIUM, Urgency.MEDIUM)
@@ -296,7 +296,7 @@ public class DemoDataLoader implements CommandLineRunner {
                 "APPLICATION", "Payroll", Impact.MEDIUM, Urgency.LOW)
                 .acknowledge(40).start(60)
                 .resolve(500, "The slip template used the previous month's label; fixed and regenerated.")
-                .verify(1500);
+                .verify(1500, 4, "Works again.");
         // Resolved, then reopened by the reporter: back IN_PROGRESS, resolution clock breached.
         report(daysAgo(3, 9, 10), MEERA, "Smart board in Room 204 not responding to touch",
                 "The smart board displays fine but ignores all touch input.",
@@ -522,7 +522,13 @@ public class DemoDataLoader implements CommandLineRunner {
         }
 
         Story verify(int minutes) {
-            at(time(minutes), () -> incidentService.verify(id, reporterId));
+            at(time(minutes), () -> incidentService.verify(id, null, reporterId));
+            return this;
+        }
+
+        // Verify with the reporter's feedback (rating 1-5, comment may be null).
+        Story verify(int minutes, int rating, String comment) {
+            at(time(minutes), () -> incidentService.verify(id, new VerifyRequest(rating, comment), reporterId));
             return this;
         }
 

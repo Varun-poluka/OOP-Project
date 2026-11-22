@@ -71,6 +71,18 @@ class NotificationMessageFormatterTest {
     }
 
     @Test
+    void reporterInteractionsReadAsSentences() {
+        assertEquals("INC-0026 (Lab 3 PCs stuck): New comment from Asha Employee: Room 204 too",
+                format("COMMENT_ADDED", "Asha Employee", "Room 204 too"));
+        assertEquals("INC-0026 (Lab 3 PCs stuck): Neha Network needs more information: Which lab?",
+                format("INFO_REQUESTED", "Neha Network", "Which lab?"));
+        assertEquals("INC-0026 (Lab 3 PCs stuck): Asha Employee answered your question: Lab 3",
+                format("INFO_PROVIDED", "Asha Employee", "Lab 3"));
+        assertEquals("INC-0026 (Lab 3 PCs stuck): Feedback from Asha Employee: Rated 5/5: Quick",
+                format("FEEDBACK_GIVEN", "Asha Employee", "Rated 5/5: Quick"));
+    }
+
+    @Test
     void slaTimesAreReadable() {
         assertEquals("INC-0026 (Lab 3 PCs stuck): Response SLA breached: not acknowledged by 20 Nov, 1:26 PM",
                 format("SLA_RESPONSE_BREACHED", "SYSTEM", "Not Acknowledged by 2026-11-20T13:26:22"));

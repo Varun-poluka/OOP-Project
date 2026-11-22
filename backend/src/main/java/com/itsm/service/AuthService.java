@@ -1,14 +1,17 @@
 package com.itsm.service;
 
 import com.itsm.domain.Administrator;
+import com.itsm.domain.Employee;
 import com.itsm.domain.User;
 import com.itsm.domain.exception.ResourceNotFoundException;
 import com.itsm.dto.LoginRequest;
 import com.itsm.dto.LoginResponse;
+import com.itsm.dto.RegisterRequest;
 import com.itsm.dto.UserResponse;
 import com.itsm.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -27,8 +30,10 @@ public class AuthService {
 
     // Same message for unknown email and wrong password, so attackers cannot find valid emails.
     private static final String BAD_CREDENTIALS = "Invalid email or password";
+    private static final String DEACTIVATED = "This account has been deactivated. Contact your administrator.";
 
     private final UserRepository userRepository;
+    private final UserAccounts userAccounts;
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final Duration tokenLifetime;
@@ -36,10 +41,12 @@ public class AuthService {
     private final String dummyHash;
 
     public AuthService(UserRepository userRepository,
+                       UserAccounts userAccounts,
                        PasswordEncoder passwordEncoder,
                        JwtEncoder jwtEncoder,
                        @Value("${itsm.jwt.lifetime-hours}") long lifetimeHours) {
         this.userRepository = userRepository;
+        this.userAccounts = userAccounts;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.tokenLifetime = Duration.ofHours(lifetimeHours);
@@ -65,6 +72,10 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BadCredentialsException(BAD_CREDENTIALS);
         }
+        // Checked after the password, so the message only tells the account's owner it is deactivated.
+        if (!user.isActive()) {
+            throw new DisabledException(DEACTIVATED);
+        }
 
         Instant now = Instant.now();
         Instant expiresAt = now.plus(tokenLifetime);
@@ -81,6 +92,15 @@ public class AuthService {
         return new LoginResponse(token, expiresAt, toResponse(user));
     }
 
+    // Always an employee. The caller then logs in as usual; registering returns no token.
+    @Transactional
+    public UserResponse register(RegisterRequest request) {
+        String email = userAccounts.requireFreeEmail(request.email());
+        Employee employee = new Employee(userAccounts.nextId(Employee.class), request.name(), email,
+                passwordEncoder.encode(request.password()));
+        return toResponse(userRepository.save(employee));
+    }
+
     @Transactional(readOnly = true)
     public UserResponse me(String userId) {
         User user = userRepository.findById(userId)
@@ -89,6 +109,6 @@ public class AuthService {
     }
 
     private UserResponse toResponse(User user) {
-        return new UserResponse(user.getId(), user.getName(), user.getEmail(), roleOf(user));
+        return UserAccounts.toResponse(user);
     }
 }

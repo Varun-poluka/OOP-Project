@@ -45,6 +45,33 @@ public final class ReportCalculator {
         return percentage(met, decided);
     }
 
+    // Mean of the reporters' 1-5 ratings, rounded to one decimal; incidents without a rating are left out.
+    public static Double averageRating(List<Incident> incidents) {
+        requireList(incidents);
+        long count = ratingCount(incidents);
+        if (count == 0) {
+            return null;
+        }
+        long total = 0;
+        for (Incident incident : incidents) {
+            if (incident.getFeedbackRating() != null) {
+                total += incident.getFeedbackRating();
+            }
+        }
+        return Math.round(total * 10.0 / count) / 10.0;
+    }
+
+    public static long ratingCount(List<Incident> incidents) {
+        requireList(incidents);
+        long count = 0;
+        for (Incident incident : incidents) {
+            if (incident.getFeedbackRating() != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public static Double meanMinutesToAcknowledge(List<Incident> incidents) {
         requireList(incidents);
         long totalMinutes = 0;

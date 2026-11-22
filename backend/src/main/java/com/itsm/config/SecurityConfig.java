@@ -2,6 +2,7 @@ package com.itsm.config;
 
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,9 +28,13 @@ public class SecurityConfig {
 
     // Hands security errors to GlobalExceptionHandler, so 401/403 use the same ProblemDetail JSON as other errors.
     private final HandlerExceptionResolver exceptionResolver;
+    // Browser origins allowed to call the API (comma-separated in itsm.cors.allowed-origins).
+    private final List<String> allowedOrigins;
 
-    public SecurityConfig(@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) {
+    public SecurityConfig(@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+                          @Value("${itsm.cors.allowed-origins}") List<String> allowedOrigins) {
         this.exceptionResolver = exceptionResolver;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -44,7 +49,7 @@ public class SecurityConfig {
                         // The original request was already checked, so the async dispatch is allowed.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         // Public
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/error").permitAll()
                         // Reporting
@@ -58,18 +63,20 @@ public class SecurityConfig {
                                 .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/services", "/api/services/*/dependencies/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/services/*/dependencies/*").hasRole("ADMIN")
-                        // Technician only: the caller's own work queue
-                        .requestMatchers(HttpMethod.GET, "/api/incidents/queue").hasRole("TECHNICIAN")
+                        // Technician only: the caller's own work queue and workload
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/queue", "/api/technicians/me").hasRole("TECHNICIAN")
                         // Technicians and admins (a technician only sees their own at-risk incidents)
                         .requestMatchers(HttpMethod.GET, "/api/incidents/at-risk", "/api/services/*/impact")
                                 .hasAnyRole("TECHNICIAN", "ADMIN")
                         // Technician work (the service and domain also check it is the assigned technician)
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/acknowledge", "/api/incidents/*/start",
                                 "/api/incidents/*/resolve").hasRole("TECHNICIAN")
-                        .requestMatchers(HttpMethod.POST, "/api/incidents/*/notes").hasRole("TECHNICIAN")
+                        .requestMatchers(HttpMethod.POST, "/api/incidents/*/notes", "/api/incidents/*/info-request")
+                                .hasRole("TECHNICIAN")
                         // Reporter actions (the domain/service also check it is the reporter)
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/verify", "/api/incidents/*/reopen")
                                 .hasRole("EMPLOYEE")
+                        .requestMatchers(HttpMethod.POST, "/api/incidents/*/comments").hasRole("EMPLOYEE")
                         .requestMatchers(HttpMethod.PATCH, "/api/incidents/*/close").hasAnyRole("EMPLOYEE", "ADMIN")
                         // Everything else (reading incidents and their impact, the service list,
                         // notifications, categories, the live stream, /api/auth/me): any logged-in user
@@ -110,10 +117,12 @@ public class SecurityConfig {
     }
 
     // Lets the React dev server (another origin) call this API from the browser.
+    // The default is http://localhost:5173; a second dev server can be added with
+    // --itsm.cors.allowed-origins=http://localhost:5173,http://localhost:5174
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

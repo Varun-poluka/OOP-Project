@@ -15,4 +15,9 @@ class AssignedState extends IncidentState {
     void reassign(Incident incident, Technician newTech, User actor){
         incident.applyReassign(newTech, actor);
     }
+
+    @Override
+    void addReporterComment(Incident incident, Employee employee, String text){
+        incident.applyAddReporterComment(employee, text);
+    }
 }

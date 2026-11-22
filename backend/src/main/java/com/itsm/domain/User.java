@@ -19,6 +19,11 @@ public abstract class User {
     @Column(nullable = false)
     private String passwordHash;
 
+    // A deactivated user cannot log in, but stays in the table so their incidents and audit
+    // records keep pointing at them. "default true" lets ddl-auto=update add the column to old rows.
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
     protected User() { }
 
     protected User(String id, String name, String email, String passwordHash){
@@ -70,6 +75,24 @@ public abstract class User {
             throw new IllegalArgumentException("Password hash cannot be empty");
         }
         this.passwordHash = passwordHash;
+    }
+
+    public boolean isActive(){
+        return active;
+    }
+
+    public void deactivate(){
+        if(!active){
+            throw new IllegalStateException(name + " is already deactivated");
+        }
+        active = false;
+    }
+
+    public void reactivate(){
+        if(active){
+            throw new IllegalStateException(name + " is already active");
+        }
+        active = true;
     }
 
     @Override

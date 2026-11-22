@@ -7,8 +7,8 @@ class ResolvedState extends IncidentState {
     }
 
     @Override
-    void verify(Incident incident, Employee employee){
-        incident.applyVerify(employee);
+    void verify(Incident incident, Employee employee, Integer rating, String comment){
+        incident.applyVerify(employee, rating, comment);
     }
 
     @Override

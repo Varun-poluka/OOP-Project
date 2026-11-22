@@ -20,4 +20,14 @@ class AcknowledgedState extends IncidentState {
     void reassign(Incident incident, Technician newTech, User actor){
         incident.applyReassign(newTech, actor);
     }
+
+    @Override
+    void addReporterComment(Incident incident, Employee employee, String text){
+        incident.applyAddReporterComment(employee, text);
+    }
+
+    @Override
+    void requestInfo(Incident incident, Technician tech, String question){
+        incident.applyRequestInfo(tech, question);
+    }
 }

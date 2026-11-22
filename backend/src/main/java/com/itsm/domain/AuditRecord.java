@@ -18,6 +18,10 @@ public class AuditRecord {
     private IncidentStatus newStatus;
     @Column(length = 2000)
     private String description;
+    // Read-only view of the join column that Incident.auditTrail writes. Lets the audit log
+    // filter by incident without a link back to Incident. Null until the incident is saved.
+    @Column(name = "incident_id", insertable = false, updatable = false)
+    private String incidentId;
 
     protected AuditRecord(){ }
 
@@ -33,6 +37,9 @@ public class AuditRecord {
         this.description = description;
     }
 
+    public Long getId(){
+        return id;
+    }
     public String getAction(){
         return action;
     }
@@ -50,6 +57,9 @@ public class AuditRecord {
     }
     public String getDescription() {
         return description;
+    }
+    public String getIncidentId() {
+        return incidentId;
     }
 
     @Override

@@ -29,7 +29,15 @@ abstract class IncidentState {
         throw refuse(IncidentStatus.RESOLVED);
     }
 
-    void verify(Incident incident, Employee employee) {
+    void addReporterComment(Incident incident, Employee employee, String text) {
+        throw new InvalidStateTransitionException(getStatus(), "add a comment");
+    }
+
+    void requestInfo(Incident incident, Technician tech, String question) {
+        throw new InvalidStateTransitionException(getStatus(), "request information");
+    }
+
+    void verify(Incident incident, Employee employee, Integer rating, String comment) {
         throw refuse(IncidentStatus.VERIFIED);
     }
 

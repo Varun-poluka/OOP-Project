@@ -35,6 +35,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({InvalidStateTransitionException.class,
+            DuplicateResourceException.class,
             TechnicianUnavailableException.class,
             IllegalStateException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {

@@ -20,4 +20,7 @@ public record ReportSummary(
         long openIncidents,
         // P1..P4 always present (0 when none). NEW incidents have no priority yet, so they count in
         // openIncidents but under no key here: the four values can add up to less than openIncidents.
-        Map<Priority, Long> openByPriority) { }
+        Map<Priority, Long> openByPriority,
+        // Mean of the 1-5 ratings reporters gave in the range; null when nobody rated.
+        Double averageRating,
+        long ratingCount) { }

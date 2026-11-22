@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-// The State pattern as a table: every status x every action (8 x 10 = 80 cases).
+// The State pattern as a table: every status x every action (8 x 12 = 96 cases).
 // A legal pair must reach the expected next status; every other pair must be refused
 // with InvalidStateTransitionException and leave the incident unchanged.
 class IncidentStateTransitionTest {
@@ -64,7 +64,9 @@ class IncidentStateTransitionTest {
         VERIFY((f, i) -> i.verify(f.reporter)),
         CLOSE((f, i) -> i.close(f.admin)),
         REOPEN((f, i) -> i.reopen(f.reporter, "still broken")),
-        REASSIGN((f, i) -> i.reassign(f.otherTech, f.admin));
+        REASSIGN((f, i) -> i.reassign(f.otherTech, f.admin)),
+        COMMENT((f, i) -> i.addReporterComment(f.reporter, "more detail")),
+        REQUEST_INFO((f, i) -> i.requestInfo(f.tech, "which room?"));
 
         private final BiConsumer<Fixture, Incident> call;
 
@@ -97,6 +99,14 @@ class IncidentStateTransitionTest {
         LEGAL.get(IncidentStatus.RESOLVED).put(Action.VERIFY, IncidentStatus.VERIFIED);
         LEGAL.get(IncidentStatus.RESOLVED).put(Action.REOPEN, IncidentStatus.IN_PROGRESS);
         LEGAL.get(IncidentStatus.VERIFIED).put(Action.CLOSE, IncidentStatus.CLOSED);
+        // The reporter may add information until the incident is resolved; neither changes the status.
+        for (IncidentStatus open : List.of(IncidentStatus.NEW, IncidentStatus.CLASSIFIED, IncidentStatus.ASSIGNED,
+                IncidentStatus.ACKNOWLEDGED, IncidentStatus.IN_PROGRESS)) {
+            LEGAL.get(open).put(Action.COMMENT, open);
+        }
+        // The technician can ask only once they have acknowledged (the same states as adding a note).
+        LEGAL.get(IncidentStatus.ACKNOWLEDGED).put(Action.REQUEST_INFO, IncidentStatus.ACKNOWLEDGED);
+        LEGAL.get(IncidentStatus.IN_PROGRESS).put(Action.REQUEST_INFO, IncidentStatus.IN_PROGRESS);
         // CLOSED: nothing is allowed.
     }
 

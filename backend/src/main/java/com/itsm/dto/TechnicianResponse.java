@@ -13,7 +13,9 @@ public record TechnicianResponse(
         List<String> skills,
         boolean available,
         int activeIncidents,
-        int maxWorkload) {
+        int maxWorkload,
+        // false once an administrator deactivates the account
+        boolean active) {
 
     public static TechnicianResponse from(Technician technician) {
         List<String> skills = new ArrayList<>();
@@ -23,6 +25,6 @@ public record TechnicianResponse(
         Collections.sort(skills); // skills is a Set, so sort for a stable order
         return new TechnicianResponse(technician.getId(), technician.getName(),
                 Collections.unmodifiableList(skills), technician.isAvailable(),
-                technician.getActiveIncidents(), technician.getMaxWorkload());
+                technician.getActiveIncidents(), technician.getMaxWorkload(), technician.isActive());
     }
 }

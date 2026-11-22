@@ -120,9 +120,25 @@ public class IncidentController {
         return incidentService.resolve(id, request, jwt.getSubject());
     }
 
+    // The reporter adds information to their own unfinished incident (also answers an info request).
+    @PostMapping("/{id}/comments")
+    public IncidentResponse addComment(@PathVariable String id, @Valid @RequestBody AddNoteRequest request,
+                                       @AuthenticationPrincipal Jwt jwt) {
+        return incidentService.addComment(id, request, jwt.getSubject());
+    }
+
+    @PostMapping("/{id}/info-request")
+    public IncidentResponse requestInfo(@PathVariable String id, @Valid @RequestBody RequestInfoRequest request,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        return incidentService.requestInfo(id, request, jwt.getSubject());
+    }
+
+    // The body (rating 1-5, comment) is optional, so older clients that send none still work.
     @PatchMapping("/{id}/verify")
-    public IncidentResponse verify(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
-        return incidentService.verify(id, jwt.getSubject());
+    public IncidentResponse verify(@PathVariable String id,
+                                   @Valid @RequestBody(required = false) VerifyRequest request,
+                                   @AuthenticationPrincipal Jwt jwt) {
+        return incidentService.verify(id, request, jwt.getSubject());
     }
 
     @PatchMapping("/{id}/close")

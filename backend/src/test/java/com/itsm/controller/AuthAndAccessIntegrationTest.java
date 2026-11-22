@@ -50,8 +50,9 @@ class AuthAndAccessIntegrationTest {
 
     @BeforeEach
     void addSecondEmployee() {
-        if (!userRepository.existsById("U-EMP-2")) {
-            userRepository.save(new Employee("U-EMP-2", "Other Employee", OTHER_EMPLOYEE,
+        // Looked up by email: registration tests may already have taken the id U-EMP-2.
+        if (userRepository.findByEmail(OTHER_EMPLOYEE).isEmpty()) {
+            userRepository.save(new Employee("U-EMP-OTHER", "Other Employee", OTHER_EMPLOYEE,
                     passwordEncoder.encode(PASSWORD)));
         }
     }

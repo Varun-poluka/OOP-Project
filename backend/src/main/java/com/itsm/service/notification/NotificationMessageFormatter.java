@@ -59,7 +59,11 @@ public final class NotificationMessageFormatter {
             case "STARTED" -> "Work started by " + actor;
             case "NOTE_ADDED" -> "New note from " + actor + ": " + description;
             case "RESOLVED" -> "Resolved by " + actor + ": " + description;
+            case "COMMENT_ADDED" -> "New comment from " + actor + ": " + description;
+            case "INFO_REQUESTED" -> actor + " needs more information: " + description;
+            case "INFO_PROVIDED" -> actor + " answered your question: " + description;
             case "VERIFIED" -> "Verified by " + actor;
+            case "FEEDBACK_GIVEN" -> "Feedback from " + actor + ": " + description;
             case "CLOSED" -> "Closed by " + actor;
             case "REOPENED" -> "Reopened by " + actor + ": " + after(description, "Reopened: ");
             case "SLA_RESPONSE_BREACHED" -> sla("Response SLA breached", "not acknowledged by", description);

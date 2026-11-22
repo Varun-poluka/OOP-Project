@@ -45,6 +45,12 @@ public record IncidentResponse(
         // Computed when the response is built, from the most urgent running SLA clock.
         RiskLevel riskLevel,
         Integer slaPercentUsed,
+        // The technician's open question to the reporter; null when none is waiting.
+        String pendingInfoRequest,
+        LocalDateTime infoRequestedAt,
+        // Given by the reporter when verifying; null when none was given.
+        Integer feedbackRating,
+        String feedbackComment,
         List<NoteResponse> notes,
         List<AuditRecordResponse> auditTrail,
         // Filled only in the response to POST /api/incidents; empty everywhere else.
@@ -94,6 +100,10 @@ public record IncidentResponse(
                 incident.isResolutionAtRisk(),
                 risk.level(),
                 risk.percentUsed(),
+                incident.getPendingInfoRequest(),
+                incident.getInfoRequestedAt(),
+                incident.getFeedbackRating(),
+                incident.getFeedbackComment(),
                 Collections.unmodifiableList(notes),
                 Collections.unmodifiableList(auditTrail),
                 List.of());
@@ -105,6 +115,7 @@ public record IncidentResponse(
                 serviceName, reporterId, reporterName, assignedTechnicianId, assignedTechnicianName,
                 resolutionDetails, createdAt, acknowledgedAt, resolvedAt, closedAt, responseDueAt,
                 resolutionDueAt, responseBreached, resolutionBreached, responseAtRisk, resolutionAtRisk,
-                riskLevel, slaPercentUsed, notes, auditTrail, List.copyOf(duplicates));
+                riskLevel, slaPercentUsed, pendingInfoRequest, infoRequestedAt, feedbackRating,
+                feedbackComment, notes, auditTrail, List.copyOf(duplicates));
     }
 }
